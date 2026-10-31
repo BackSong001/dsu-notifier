@@ -1,5 +1,10 @@
 export class NoticeStore {
   #notices = new Map();
+  #now;
+
+  constructor({ now = () => new Date().toISOString() } = {}) {
+    this.#now = now;
+  }
 
   saveBoard(boardCode, notices, { success = true } = {}) {
     if (!success) throw new Error('Scrape failed');
@@ -10,22 +15,30 @@ export class NoticeStore {
       const key = `${boardCode}:${notice.sourceIdx}`;
       seen.add(key);
       const previous = this.#notices.get(key);
-      this.#notices.set(key, {
-        ...notice,
-        id: previous?.id ?? key,
-        importanceStatus: notice.isNotice ? 'true' : null,
-        firstCollectedAt: previous?.firstCollectedAt ?? new Date().toISOString(),
-        lastSeenAt: new Date().toISOString(),
-      });
+      this.#notices.set(key, this.#storedNotice(key, previous, notice));
       if (!previous) newCount += 1;
     }
 
+    this.#markMissingPinned(boardCode, seen);
+    return { newCount };
+  }
+
+  #storedNotice(key, previous, notice) {
+    return {
+        ...notice,
+        id: previous?.id ?? key,
+        importanceStatus: notice.isNotice ? 'true' : null,
+        firstCollectedAt: previous?.firstCollectedAt ?? this.#now(),
+        lastSeenAt: this.#now(),
+      };
+  }
+
+  #markMissingPinned(boardCode, seen) {
     for (const [key, notice] of this.#notices) {
       if (notice.boardCode === boardCode && notice.isNotice && !seen.has(key)) {
         this.#notices.set(key, { ...notice, importanceStatus: 'failed' });
       }
     }
-    return { newCount };
   }
 
   get(boardCode, sourceIdx) {
