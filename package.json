@@ -1,4 +1,8 @@
 {
+  "type": "module",
+  "scripts": {
+    "test": "node --test backend/__TEST__/*.test.js"
+  },
   "devDependencies": {
     "supabase": "^2.122.0"
   }

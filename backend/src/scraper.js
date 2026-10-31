@@ -1,0 +1,58 @@
+const ALLOWED_HOST = 'www.dongseo.ac.kr';
+
+function decodeHtml(value) {
+  return value
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cell(row, name) {
+  const match = row.match(new RegExp(`<td[^>]*class=["'][^"']*\\b${name}\\b[^"']*["'][^>]*>([\\s\\S]*?)</td>`, 'i'));
+  return match ? decodeHtml(match[1]) : '';
+}
+
+export function parseBoard(html, { boardCode, boardName, pageUrl }) {
+  const rows = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map((match) => match[0]);
+  const notices = rows.flatMap((row) => {
+    const link = row.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+    if (!link) return [];
+
+    const url = new URL(decodeHtml(link[1]), pageUrl);
+    if (url.hostname !== ALLOWED_HOST || !url.searchParams.get('idx')) return [];
+
+    const numberText = cell(row, 'num').replace(/[^0-9]/g, '');
+    const isNotice = /class=["'][^"']*\b(?:notice|isnotice)\b|icon-notice/i.test(row) || numberText.length === 0;
+    return [{
+      boardCode,
+      boardName,
+      sourceIdx: url.searchParams.get('idx'),
+      number: numberText ? Number(numberText) : null,
+      title: decodeHtml(link[2]),
+      author: cell(row, 'writer'),
+      publishedAt: cell(row, 'date'),
+      viewCount: Number(cell(row, '(?:hit|read)').replaceAll(',', '')) || 0,
+      url: url.href,
+      isNotice,
+      importanceStatus: isNotice ? 'true' : null,
+    }];
+  });
+
+  if (notices.length === 0) throw new Error('No notices found');
+  return notices;
+}
+
+export async function fetchBoard(board, fetchImpl = fetch) {
+  const response = await fetchImpl(board.url);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return parseBoard(await response.text(), {
+    boardCode: board.code,
+    boardName: board.name,
+    pageUrl: board.url,
+  });
+}
