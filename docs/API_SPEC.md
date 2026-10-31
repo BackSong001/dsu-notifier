@@ -34,12 +34,15 @@ Response `200`:
       "published_at": "2026-10-29",
       "view_count": 123,
       "url": "https://www.dongseo.ac.kr/kr/index.php?pCode=MN2000194&mode=view&idx=103653",
-      "is_notice": false
+      "is_notice": false,
+      "importance_status": null
     }
   ],
   "next_cursor": null
 }
 ```
+
+`number`는 번호가 없는 고정 공지에서 `null`이다. `importance_status`는 고정 공지에만 `true` 또는 `failed`를 사용하며, 일반 공지는 `null`이다.
 
 ## GET `/notices/{id}`
 

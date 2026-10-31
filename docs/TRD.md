@@ -40,6 +40,8 @@ Supabase Cron
 - `notification_outbox`: 발송 대기 및 결과
 - `scrape_runs`: 수집 실행 결과와 오류
 
+`notices`의 `number`는 nullable이다. 번호가 없는 고정 공지는 `number = null`이며, `is_notice = true`이다. `importance_status`는 `true`, `failed`, `null` 중 하나다. `true`는 최신 수집에서 첫 페이지에 확인된 고정 공지, `failed`는 이전에는 확인됐지만 최신 첫 페이지에서 확인되지 않은 고정 공지, `null`은 일반 공지를 뜻한다.
+
 핵심 제약:
 
 - `notices(board_code, source_idx)` UNIQUE
@@ -56,6 +58,16 @@ Supabase Cron
 5. 상세 링크의 `pCode`, `idx`를 원본 키로 저장한다.
 6. 신규 insert가 발생한 경우에만 outbox를 만든다.
 7. 수집 결과를 `scrape_runs`에 기록한다.
+
+고정 공지 상태 갱신은 게시판 수집이 성공하고 목록 파싱이 유효한 경우에만 수행한다. 목록 요청 또는 파싱이 실패하면 기존 공지의 `importance_status`를 변경하지 않는다.
+
+고정 공지 상태 전이는 다음과 같다.
+
+```text
+new pinned       -> true
+existing pinned  -> true (seen) / failed (not in latest first page)
+failed pinned    -> true (seen again)
+```
 
 최신 공지는 첫 페이지에 나타나는 현재 사이트 구조를 전제로 한다. 게시판별 고정 공지와 일반 공지를 모두 파싱한다.
 
