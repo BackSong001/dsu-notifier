@@ -20,6 +20,8 @@ Supabase Cron
 - FCM 토큰 등록
 - 게시판별 알림 설정
 - Android 알림 권한 요청
+- Backend API Client와 화면을 분리해 테스트한다.
+- 시각 디자인은 Frontend 테스트와 독립적으로 결정하며 현재 확정하지 않는다.
 
 ### Scrape Edge Function
 

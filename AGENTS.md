@@ -25,8 +25,10 @@
 ## 테스트 규칙
 
 - 백엔드 테스트 파일은 `backend/__TEST__/`에 둔다.
+- Frontend 테스트 파일은 `frontend/test/`에 둔다.
 - 기능 구현은 Red → Green → Refactoring 순서로 진행한다.
 - 외부 동서대학교 페이지를 사용하는 테스트와 고정 HTML fixture를 사용하는 단위 테스트를 구분한다.
+- Frontend Widget 테스트에서는 Backend 호출을 가짜 Client로 대체하고, 실제 API 연동은 별도 Integration 테스트로 분리한다.
 - 수집 주기는 운영에서 10분이며, 30초 주기 테스트는 테스트 러너에서만 사용한다.
 - Android 알림 권한과 실제 FCM 수신은 Android 에뮬레이터 수동/통합 테스트로 검증한다.
 - 테스트용 공지 데이터와 디바이스 토큰은 운영 데이터·비밀값과 분리한다.

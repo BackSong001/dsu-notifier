@@ -77,6 +77,37 @@
 | TC-SEC-002 | 로그 검사 | FCM 토큰과 비밀값이 기록되지 않는다 |
 | TC-SEC-003 | 내부 수집 함수 직접 호출 | 공개 앱 API처럼 임의 호출되지 않는다 |
 
+## 8. Frontend 테스트
+
+Frontend의 시각 디자인과 레이아웃은 아직 확정하지 않는다. 아래 테스트는 디자인과 독립적인 사용자 동작·데이터 계약을 검증한다.
+
+| ID | 구분 | 시나리오 | 기대 결과 |
+|---|---|---|---|
+| TC-FE-001 | Widget | 공지 목록 화면 진입 | 로딩 상태가 표시된 후 Backend 공지 목록이 표시된다 |
+| TC-FE-002 | Widget | Backend 공지 응답 표시 | 제목, 조회수, 등록일, 번호, 게시판명이 응답 값 그대로 표시된다 |
+| TC-FE-003 | Widget | 번호 없는 고정 공지 표시 | 번호 영역이 오류를 내지 않고 `null` 또는 고정 상태로 표시된다 |
+| TC-FE-004 | Widget | Backend 오류 응답 | 오류 메시지와 다시 시도 동작이 표시된다 |
+| TC-FE-005 | Widget | 공지 0건 응답 | 빈 목록 안내와 새로고침 동작이 표시된다 |
+| TC-FE-006 | Widget | 게시판 필터 선택 | 선택한 `board_code`로 Backend를 재조회하고 해당 게시판만 표시한다 |
+| TC-FE-007 | Widget | 공지 항목 선택 | 해당 공지 URL 열기 동작을 호출한다 |
+| TC-FE-008 | Client | `GET /notices` 호출 | query, limit, cursor가 API 명세대로 전송된다 |
+| TC-FE-009 | Client | API 응답 역직렬화 | snake_case 응답이 앱 모델로 정확히 변환된다 |
+| TC-FE-010 | Client | HTTP 4xx/5xx 및 timeout | 원문 English error code를 보존하고 사용자용 원인 안내를 표시한다 |
+| TC-FE-011 | Device | FCM 토큰 등록 | 앱 시작 또는 토큰 갱신 시 `/devices/register`가 호출된다 |
+| TC-FE-012 | Device | Android 알림 권한 허용 | 권한 상태를 활성화로 표시하고 알림 수신 준비를 완료한다 |
+| TC-FE-013 | Device | Android 알림 권한 거부 | 설정으로 이동할 수 있는 안내를 표시하고 앱은 공지 조회를 계속한다 |
+| TC-FE-014 | Device | 게시판 알림 켜기/끄기 | `/devices/{device_id}/preferences`에 변경값을 저장한다 |
+| TC-FE-015 | Integration | 실제 테스트 Backend에서 공지 조회 | Fixture가 아닌 API 응답이 화면에 표시된다 |
+| TC-FE-016 | Integration | 새 공지 알림 수신 | 테스트 공지의 알림이 에뮬레이터에 표시된다 |
+| TC-FE-017 | Integration | 알림 또는 공지 클릭 | 해당 공지 URL이 외부 브라우저로 열린다 |
+
+Frontend 테스트는 다음 경계를 사용한다.
+
+- Widget 테스트: Backend 호출을 가짜 Client로 대체하고 화면 상태만 검증한다.
+- Client 테스트: HTTP 서버 또는 요청 가짜 객체로 API 계약만 검증한다.
+- Integration 테스트: 테스트 Supabase 프로젝트 또는 로컬 Supabase와 Android 에뮬레이터를 사용한다.
+- FCM 및 Android 권한 테스트: 실제 에뮬레이터에서만 최종 판정한다.
+
 ## 테스트 순서
 
 1. scraper fixture 파싱 Red → Green → Refactoring
@@ -84,3 +115,7 @@
 3. GET API와 실제 URL 접속 Red → Green → Refactoring
 4. 30초 테스트 수집과 테스트 공지 감지 Red → Green → Refactoring
 5. Android 에뮬레이터 알림 권한·FCM·URL 열기 수동/통합 확인
+6. Frontend Client API 계약 Red → Green → Refactoring
+7. Frontend Widget 상태·필드 표시 Red → Green → Refactoring
+8. Frontend와 테스트 Backend 통합 조회·필터·재시도 확인
+9. Android 에뮬레이터에서 권한·FCM·URL 열기 최종 확인
