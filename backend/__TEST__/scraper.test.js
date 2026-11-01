@@ -52,3 +52,14 @@ test('rejects malformed board markup', () => {
     /No notices found/,
   );
 });
+
+test('deduplicates repeated source indexes', () => {
+  const notices = parseBoard(`${fixture}${fixture}`, {
+    boardCode: 'MN2000194',
+    boardName: '학사',
+    pageUrl: 'https://www.dongseo.ac.kr/kr/?pCode=MN2000194',
+  });
+
+  assert.equal(notices.length, 2);
+  assert.deepEqual(notices.map((notice) => notice.sourceIdx), ['103653', '103600']);
+});

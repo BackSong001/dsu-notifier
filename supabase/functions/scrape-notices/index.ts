@@ -12,6 +12,18 @@ function authorized(request: Request): boolean {
   return Boolean(secret && request.headers.get("x-cron-secret") === secret);
 }
 
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object") {
+    const value = error as Record<string, unknown>;
+    return [value.message, value.details, value.hint, value.code]
+      .filter(Boolean)
+      .map(String)
+      .join(" | ");
+  }
+  return String(error);
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return new Response("POST is required", { status: 405 });
   if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
@@ -19,9 +31,13 @@ Deno.serve(async (request) => {
   const results = [];
   for (const board of BOARDS) {
     const startedAt = new Date().toISOString();
+    let failureStatus = "parse_failed";
     try {
-      const response = await fetch(board.url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const response = await fetch(board.url, { signal: AbortSignal.timeout(20_000) });
+      if (!response.ok) {
+        failureStatus = "http_failed";
+        throw new Error(`HTTP ${response.status}`);
+      }
       const notices = parseBoard(await response.text(), board);
       const { data, error } = await supabase
         .from("notices")
@@ -50,7 +66,7 @@ Deno.serve(async (request) => {
       await supabase.from("scrape_runs").insert({ board_code: board.code, status: "success", started_at: startedAt, finished_at: new Date().toISOString() });
       results.push({ board_code: board.code, status: "success", count: data?.length ?? 0 });
     } catch (error) {
-      await supabase.from("scrape_runs").insert({ board_code: board.code, status: "parse_failed", error_message: error instanceof Error ? error.message : String(error), started_at: startedAt, finished_at: new Date().toISOString() });
+      await supabase.from("scrape_runs").insert({ board_code: board.code, status: failureStatus, error_message: errorMessage(error), started_at: startedAt, finished_at: new Date().toISOString() });
       results.push({ board_code: board.code, status: "failed" });
     }
   }

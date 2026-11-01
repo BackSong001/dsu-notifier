@@ -19,7 +19,7 @@ function cell(row: string, className: string): string {
 
 export function parseBoard(html: string, board: { code: string; name: string; url: string }) {
   const rows = [...html.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map((match) => match[0]);
-  const notices = rows.flatMap((row) => {
+  const parsedNotices = rows.flatMap((row) => {
     const link = row.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
     if (!link) return [];
     const url = new URL(text(link[1]), board.url);
@@ -43,6 +43,11 @@ export function parseBoard(html: string, board: { code: string; name: string; ur
       last_seen_at: new Date().toISOString(),
     }];
   });
+  const notices = [...parsedNotices.reduce((unique, notice) => {
+    const existing = unique.get(notice.source_idx);
+    if (!existing || notice.is_notice) unique.set(notice.source_idx, notice);
+    return unique;
+  }, new Map<string, (typeof parsedNotices)[number]>()).values()];
   if (notices.length === 0) throw new Error("No notices found");
   return notices;
 }

@@ -19,7 +19,7 @@ function cell(row, name) {
 
 export function parseBoard(html, { boardCode, boardName, pageUrl }) {
   const rows = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map((match) => match[0]);
-  const notices = rows.flatMap((row) => {
+  const parsedNotices = rows.flatMap((row) => {
     const link = row.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
     if (!link) return [];
 
@@ -42,6 +42,11 @@ export function parseBoard(html, { boardCode, boardName, pageUrl }) {
       importanceStatus: isNotice ? 'true' : null,
     }];
   });
+  const notices = [...parsedNotices.reduce((unique, notice) => {
+    const existing = unique.get(notice.sourceIdx);
+    if (!existing || notice.isNotice) unique.set(notice.sourceIdx, notice);
+    return unique;
+  }, new Map()).values()];
 
   if (notices.length === 0) throw new Error('No notices found');
   return notices;
