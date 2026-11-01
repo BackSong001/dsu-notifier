@@ -2,3 +2,5 @@
 env/
 env/*
 node_modules/
+frontend/app/google-services.json
+frontend/android/app/google-services.json
