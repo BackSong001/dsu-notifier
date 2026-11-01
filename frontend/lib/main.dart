@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -84,25 +86,42 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
 
   Future<void> _registerForPush() async {
     if (_apiUrl.isEmpty) return;
-    await Firebase.initializeApp();
-    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
-    final messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission();
-    // The current token is needed for the initial device registration.
-    // ignore: deprecated_member_use
-    final token = await messaging.getToken();
-    if (token == null) return;
-    final client = NoticeApiClient(baseUrl: _apiUrl, apiKey: _apiKey);
-    await client.registerDevice(
-      deviceId: token,
-      fcmToken: token,
-      platform: 'android',
-    );
-    await client.savePreferences(token, {'MN2000194': true});
-    FirebaseMessaging.onMessageOpenedApp.listen((message) {
-      final url = message.data['url'];
-      if (url is String) _openNotice(url);
-    });
+    try {
+      debugPrint('FCM registration started');
+      developer.log('FCM registration started', name: 'dsu_notifier');
+      await Firebase.initializeApp();
+      developer.log('Firebase initialized', name: 'dsu_notifier');
+      FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission();
+      developer.log('Notification permission requested', name: 'dsu_notifier');
+      // The current token is needed for the initial device registration.
+      // ignore: deprecated_member_use
+      final token = await messaging.getToken().timeout(
+        const Duration(seconds: 15),
+      );
+      developer.log('FCM token request completed', name: 'dsu_notifier');
+      if (token == null) return;
+      final client = NoticeApiClient(baseUrl: _apiUrl, apiKey: _apiKey);
+      await client.registerDevice(
+        deviceId: token,
+        fcmToken: token,
+        platform: 'android',
+      );
+      await client.savePreferences(token, {'MN2000194': true});
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        final url = message.data['url'];
+        if (url is String) _openNotice(url);
+      });
+      developer.log('FCM device registration succeeded', name: 'dsu_notifier');
+      debugPrint('FCM device registration succeeded');
+    } catch (error) {
+      developer.log(
+        'FCM device registration failed: $error',
+        name: 'dsu_notifier',
+      );
+      debugPrint('FCM device registration failed: $error');
+    }
   }
 
   Future<void> _loadNotices() async {
