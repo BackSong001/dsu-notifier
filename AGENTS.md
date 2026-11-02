@@ -46,6 +46,12 @@
 - Edge Function과 DB: Supabase 프로젝트
 - 비밀값: Supabase Secrets 또는 로컬 `.env`에만 저장
 
+## 디자인 문서
+
+- UI 디자인과 컴포넌트 구현 시 `docs/DESIGN_SYSTEM.md`를 참고한다.
+- 색상 값의 원본은 프로젝트 루트의 `colors.json`이다.
+- 제공된 디자인 이미지는 레이아웃 참고 자료이며 색상 기준이 아니다.
+
 ## 금지 사항
 
 ### 보안

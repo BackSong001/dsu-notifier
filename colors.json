@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "name": "Dongseo University Color System",
+    "source": "https://www.dongseo.ac.kr/kr/?pCode=MN2000194",
+    "brand_reference": "https://blog.dongseo.ac.kr/kr/index.php?idx=88290&mode=view&pCode=MN2000432",
+    "note": "primary.DEFAULT is the officially published DSU main color. Other values are proposed UI support colors, not verified official brand colors."
+  },
+  "colors": {
+    "primary": {
+      "DEFAULT": "#E11837",
+      "hover": "#C91430",
+      "active": "#A91028",
+      "light": "#FCE8EC",
+      "foreground": "#FFFFFF"
+    },
+    "secondary": {
+      "DEFAULT": "#333333",
+      "hover": "#222222",
+      "light": "#F2F2F2",
+      "foreground": "#FFFFFF"
+    },
+    "background": {
+      "DEFAULT": "#FFFFFF",
+      "primary": "#FFFFFF",
+      "secondary": "#F7F7F8",
+      "tertiary": "#F0F1F3",
+      "inverse": "#202124"
+    },
+    "surface": {
+      "DEFAULT": "#FFFFFF",
+      "subtle": "#FAFAFA",
+      "muted": "#F3F4F6",
+      "elevated": "#FFFFFF"
+    },
+    "text": {
+      "primary": "#222222",
+      "secondary": "#555555",
+      "tertiary": "#777777",
+      "muted": "#999999",
+      "inverse": "#FFFFFF",
+      "link": "#D31634"
+    },
+    "border": {
+      "DEFAULT": "#DDDDDD",
+      "light": "#EEEEEE",
+      "strong": "#BBBBBB",
+      "focus": "#E11837"
+    },
+    "status": {
+      "success": "#218838",
+      "warning": "#E6A23C",
+      "error": "#DC3545",
+      "info": "#2878C7"
+    },
+    "interactive": {
+      "link": "#D31634",
+      "linkHover": "#A91028",
+      "buttonPrimary": "#E11837",
+      "buttonPrimaryHover": "#C91430",
+      "buttonDisabled": "#CCCCCC",
+      "focusRing": "#E11837"
+    },
+    "overlay": {
+      "DEFAULT": "rgba(0, 0, 0, 0.45)",
+      "light": "rgba(0, 0, 0, 0.20)"
+    }
+  }
+}

@@ -14,6 +14,8 @@ Supabase Cron
 
 ## 2. 구성요소
 
+컴포넌트별 책임과 실행 흐름은 [`COMPONENTS.md`](./COMPONENTS.md)를 함께 참조한다.
+
 ### Flutter 앱
 
 - 공지 목록과 상세 URL 제공
