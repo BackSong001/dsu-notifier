@@ -68,8 +68,12 @@ void main() {
     await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('알림 켜기').first);
+    expect(find.text('모집'), findsOneWidget);
+    expect(find.byTooltip('학사 알림 켜기'), findsOneWidget);
+    expect(find.byTooltip('알림 켜기'), findsNothing);
+    await tester.tap(find.byTooltip('학사 알림 켜기'));
     await tester.pumpAndSettle();
+    expect(find.byTooltip('학사 알림 끄기'), findsOneWidget);
     await tester.tap(find.byTooltip('Open navigation menu'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('알람공지'));

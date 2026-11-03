@@ -17,6 +17,7 @@ const _boards = <({String code, String label})>[
   (code: 'MN2000194', label: '학사'),
   (code: 'MN2000191', label: '공지/행사'),
   (code: 'job_plus', label: '취업'),
+  (code: 'MN2000197', label: '모집'),
   (code: 'MN2000195', label: '장학'),
   (code: 'MN2000196', label: '입찰'),
 ];
@@ -152,8 +153,6 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         fcmToken: token,
         platform: 'android',
       );
-      await client.savePreferences(token, {'MN2000194': true});
-      _alarmBoards.add('MN2000194');
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
         final url = message.data['url'];
         if (url is String) _openNotice(url);
@@ -233,13 +232,13 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
     });
   }
 
-  Future<void> _toggleAlarm(Notice notice) async {
-    final enabled = !_alarmBoards.contains(notice.boardCode);
+  Future<void> _toggleBoardAlarm(String boardCode) async {
+    final enabled = !_alarmBoards.contains(boardCode);
     setState(() {
       if (enabled) {
-        _alarmBoards.add(notice.boardCode);
+        _alarmBoards.add(boardCode);
       } else {
-        _alarmBoards.remove(notice.boardCode);
+        _alarmBoards.remove(boardCode);
       }
     });
     if (_deviceId == null || _apiUrl.isEmpty) return;
@@ -247,14 +246,14 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
       await NoticeApiClient(
         baseUrl: _apiUrl,
         apiKey: _apiKey,
-      ).savePreferences(_deviceId!, {notice.boardCode: enabled});
+      ).savePreferences(_deviceId!, {boardCode: enabled});
     } catch (error) {
       if (!mounted) return;
       setState(() {
         if (enabled) {
-          _alarmBoards.remove(notice.boardCode);
+          _alarmBoards.remove(boardCode);
         } else {
-          _alarmBoards.add(notice.boardCode);
+          _alarmBoards.add(boardCode);
         }
       });
       ScaffoldMessenger.of(
@@ -328,15 +327,36 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            _selectedMenu == '알람공지'
-                ? '알람공지'
-                : '${_boardLabel(_selectedBoard)} 공지사항',
-            style: const TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              color: _DsuColors.text,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _selectedMenu == '알람공지'
+                      ? '알람공지'
+                      : '${_boardLabel(_selectedBoard)} 공지사항',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    color: _DsuColors.text,
+                  ),
+                ),
+              ),
+              if (_selectedMenu == '공지사항')
+                IconButton(
+                  tooltip: _alarmBoards.contains(_selectedBoard)
+                      ? '${_boardLabel(_selectedBoard)} 알림 끄기'
+                      : '${_boardLabel(_selectedBoard)} 알림 켜기',
+                  onPressed: () => _toggleBoardAlarm(_selectedBoard),
+                  color: _alarmBoards.contains(_selectedBoard)
+                      ? _DsuColors.primary
+                      : _DsuColors.tertiaryText,
+                  icon: Icon(
+                    _alarmBoards.contains(_selectedBoard)
+                        ? Icons.notifications_active
+                        : Icons.notifications_none,
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 6),
           Text(
@@ -404,10 +424,6 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (_, index) => NoticeCard(
                       notice: notices[index],
-                      alarmEnabled: _alarmBoards.contains(
-                        notices[index].boardCode,
-                      ),
-                      onAlarm: () => _toggleAlarm(notices[index]),
                       onTap: () => _openNotice(notices[index].url),
                     ),
                   ),
@@ -582,17 +598,9 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
 }
 
 class NoticeCard extends StatelessWidget {
-  const NoticeCard({
-    super.key,
-    required this.notice,
-    required this.alarmEnabled,
-    required this.onAlarm,
-    required this.onTap,
-  });
+  const NoticeCard({super.key, required this.notice, required this.onTap});
 
   final Notice notice;
-  final bool alarmEnabled;
-  final VoidCallback onAlarm;
   final VoidCallback onTap;
 
   @override
@@ -645,19 +653,6 @@ class NoticeCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: alarmEnabled ? '알림 끄기' : '알림 켜기',
-                    onPressed: onAlarm,
-                    color: alarmEnabled
-                        ? _DsuColors.primary
-                        : _DsuColors.tertiaryText,
-                    icon: Icon(
-                      alarmEnabled
-                          ? Icons.notifications_active
-                          : Icons.notifications_none,
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 4),
