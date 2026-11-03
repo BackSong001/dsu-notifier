@@ -21,3 +21,16 @@ test('does not change stored pinned state when scrape fails', () => {
   assert.throws(() => store.saveBoard('MN2000194', [], { success: false }), /Scrape failed/);
   assert.equal(store.get('MN2000194', '2').importanceStatus, 'true');
 });
+
+test('lists pinned notices before newer normal notices', () => {
+  const store = new NoticeStore();
+  store.saveBoard('MN2000194', [
+    { ...normal, publishedAt: '2026-10-30' },
+    { ...pinnedNotice, publishedAt: '2026-10-01' },
+  ]);
+
+  assert.deepEqual(
+    store.list().map((notice) => notice.title),
+    ['고정 공지', '일반 공지'],
+  );
+});

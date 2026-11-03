@@ -25,17 +25,24 @@ Map<String, dynamic> noticeJson({
 }
 
 Map<String, dynamic> noticeResponse(Map<String, dynamic> notice) => {
-      'items': [notice],
-      'next_cursor': null,
-    };
+  'items': [notice],
+  'next_cursor': null,
+};
 
 Notice makeNotice({
   String title = 'Backend에서 받은 공지',
   int? number = 831,
   int viewCount = 1234,
+  bool isNotice = false,
+  String? importanceStatus,
 }) {
   return Notice.fromJson({
-    ...noticeJson(title: title, number: number),
+    ...noticeJson(
+      title: title,
+      number: number,
+      isNotice: isNotice,
+      importanceStatus: importanceStatus,
+    ),
     'view_count': viewCount,
   });
 }

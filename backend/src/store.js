@@ -48,7 +48,10 @@ export class NoticeStore {
   list({ boardCode, limit = 20 } = {}) {
     return [...this.#notices.values()]
       .filter((notice) => !boardCode || notice.boardCode === boardCode)
-      .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+      .sort((a, b) => {
+        if (a.isNotice !== b.isNotice) return a.isNotice ? -1 : 1;
+        return b.publishedAt.localeCompare(a.publishedAt);
+      })
       .slice(0, Math.min(limit, 100));
   }
 }

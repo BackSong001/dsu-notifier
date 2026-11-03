@@ -78,4 +78,40 @@ void main() {
     expect(find.text('공지 0'), findsOneWidget);
     expect(find.text('알림을 설정한 게시판의 공지입니다.'), findsOneWidget);
   });
+
+  testWidgets('opens alarm notices from the app bar button', (tester) async {
+    await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('알람공지'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('알람공지'), findsOneWidget);
+    expect(find.text('알림을 설정한 게시판의 공지입니다.'), findsOneWidget);
+  });
+
+  testWidgets('keeps pinned notices before newer normal notices', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final mixedNotices = [
+      makeNotice(title: '신규 추가 공지', number: 900),
+      makeNotice(
+        title: '고정 안내 공지',
+        number: null,
+        isNotice: true,
+        importanceStatus: 'true',
+      ),
+    ];
+    await tester.pumpWidget(DsuNotifierApp(initialNotices: mixedNotices));
+    await tester.pumpAndSettle();
+
+    final cards = tester.widgetList<NoticeCard>(find.byType(NoticeCard));
+    expect(cards.first.notice.isNotice, isTrue);
+    expect(cards.last.notice.title, '신규 추가 공지');
+  });
 }

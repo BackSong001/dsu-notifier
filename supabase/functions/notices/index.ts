@@ -20,7 +20,10 @@ Deno.serve(async (request) => {
   const url = new URL(request.url);
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? "20"), 1), 100);
   const boardCode = url.searchParams.get("board_code");
-  let query = supabase.from("notices").select("*").order("published_at", { ascending: false }).limit(limit);
+  let query = supabase.from("notices").select("*")
+    .order("is_notice", { ascending: false })
+    .order("published_at", { ascending: false })
+    .limit(limit);
   if (boardCode) query = query.eq("board_code", boardCode);
 
   const { data, error } = await query;

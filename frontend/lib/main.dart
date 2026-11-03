@@ -30,6 +30,7 @@ class _DsuColors {
   static const secondaryText = Color(0xFF555555);
   static const tertiaryText = Color(0xFF777777);
   static const border = Color(0xFFDDDDDD);
+  static const borderLight = Color(0xFFEEEEEE);
 }
 
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
@@ -51,25 +52,38 @@ class DsuNotifierApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: _DsuColors.background,
-        colorScheme: ColorScheme.fromSeed(seedColor: _DsuColors.primary),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: _DsuColors.primary,
+          primary: _DsuColors.primary,
+          onPrimary: _DsuColors.surface,
+          surface: _DsuColors.surface,
+          onSurface: _DsuColors.text,
+        ),
         appBarTheme: const AppBarTheme(
           backgroundColor: _DsuColors.surface,
           foregroundColor: _DsuColors.text,
           elevation: 0,
+          toolbarHeight: 64,
+          titleTextStyle: TextStyle(
+            color: _DsuColors.primary,
+            fontSize: 21,
+            fontWeight: FontWeight.w800,
+          ),
         ),
         inputDecorationTheme: const InputDecorationTheme(
           filled: true,
           fillColor: _DsuColors.surface,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
             borderSide: BorderSide(color: _DsuColors.border),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
             borderSide: BorderSide(color: _DsuColors.border),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderRadius: BorderRadius.all(Radius.circular(8)),
             borderSide: BorderSide(color: _DsuColors.primary, width: 2),
           ),
         ),
@@ -95,7 +109,6 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   String _selectedMenu = '공지사항';
   String _query = '';
   int _page = 1;
-  bool _notificationsEnabled = false;
   bool _loading = false;
   String? _deviceId;
   final _alarmBoards = <String>{};
@@ -116,9 +129,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   }
 
   Future<void> _requestNotificationPermission() async {
-    final enabled =
-        await _native.invokeMethod<bool>('requestNotifications') ?? false;
-    if (mounted) setState(() => _notificationsEnabled = enabled);
+    await _native.invokeMethod<bool>('requestNotifications');
   }
 
   Future<void> _registerForPush() async {
@@ -178,11 +189,16 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         ? _notices.where((notice) => _alarmBoards.contains(notice.boardCode))
         : _notices.where((notice) => notice.boardCode == _selectedBoard);
     final query = _query.trim().toLowerCase();
-    return query.isEmpty
+    final notices = query.isEmpty
         ? source.toList()
         : source
               .where((notice) => notice.title.toLowerCase().contains(query))
               .toList();
+    notices.sort((a, b) {
+      if (a.isNotice == b.isNotice) return 0;
+      return a.isNotice ? -1 : 1;
+    });
+    return notices;
   }
 
   int get _pageCount =>
@@ -276,13 +292,12 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: '알림 권한',
-            onPressed: _requestNotificationPermission,
-            icon: Icon(
-              _notificationsEnabled
-                  ? Icons.notifications
-                  : Icons.notifications_none,
-            ),
+            tooltip: '알람공지',
+            onPressed: () => setState(() {
+              _selectedMenu = '알람공지';
+              _page = 1;
+            }),
+            icon: const Icon(Icons.notifications_active_outlined),
           ),
         ],
       ),
@@ -346,9 +361,17 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
               ),
               const SizedBox(width: 8),
               SizedBox(
-                height: 56,
+                height: 48,
                 child: FilledButton(
                   onPressed: _search,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _DsuColors.primary,
+                    foregroundColor: _DsuColors.surface,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                  ),
                   child: const Text('검색'),
                 ),
               ),
@@ -406,28 +429,54 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
 
   Widget _buildBoardTabs() {
     return Container(
-      color: _DsuColors.surface,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 52,
+      decoration: const BoxDecoration(
+        color: _DsuColors.surface,
+        border: Border(bottom: BorderSide(color: _DsuColors.borderLight)),
+      ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
           children: _boards
               .map(
-                (board) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: TextButton(
-                    onPressed: () => _selectBoard(board.code),
-                    style: TextButton.styleFrom(
-                      foregroundColor: _selectedBoard == board.code
-                          ? _DsuColors.primary
-                          : _DsuColors.secondaryText,
-                    ),
-                    child: Text(
-                      board.label,
-                      style: TextStyle(
-                        fontWeight: _selectedBoard == board.code
-                            ? FontWeight.w800
-                            : FontWeight.w500,
+                (board) => SizedBox(
+                  height: 52,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: TextButton(
+                      onPressed: () => _selectBoard(board.code),
+                      style: TextButton.styleFrom(
+                        foregroundColor: _selectedBoard == board.code
+                            ? _DsuColors.primary
+                            : _DsuColors.secondaryText,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        shape: const RoundedRectangleBorder(),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 11),
+                            child: Text(
+                              board.label,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: _selectedBoard == board.code
+                                    ? FontWeight.w800
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            height: 2,
+                            width: 54,
+                            child: ColoredBox(
+                              color: _selectedBoard == board.code
+                                  ? _DsuColors.primary
+                                  : Colors.transparent,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -455,9 +504,26 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
               width: 40,
               height: 40,
               child: page == _page
-                  ? FilledButton(onPressed: null, child: Text('$page'))
+                  ? FilledButton(
+                      onPressed: null,
+                      style: FilledButton.styleFrom(
+                        disabledBackgroundColor: _DsuColors.primary,
+                        disabledForegroundColor: _DsuColors.surface,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text('$page'),
+                    )
                   : OutlinedButton(
                       onPressed: () => setState(() => _page = page),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _DsuColors.secondaryText,
+                        side: const BorderSide(color: _DsuColors.border),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                       child: Text('$page'),
                     ),
             ),
@@ -557,15 +623,26 @@ class NoticeCard extends StatelessWidget {
                       ),
                       decoration: BoxDecoration(
                         color: _DsuColors.primaryLight,
-                        borderRadius: BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        '고정 공지',
-                        style: TextStyle(
-                          color: _DsuColors.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.push_pin,
+                            size: 12,
+                            color: _DsuColors.primary,
+                          ),
+                          const SizedBox(width: 3),
+                          const Text(
+                            '고정 공지',
+                            style: TextStyle(
+                              color: _DsuColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   const Spacer(),
