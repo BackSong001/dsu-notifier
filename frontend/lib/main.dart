@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:firebase_core/firebase_core.dart';
@@ -106,6 +107,7 @@ class NoticeHomePage extends StatefulWidget {
 class _NoticeHomePageState extends State<NoticeHomePage> {
   late List<Notice> _notices;
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
   String _selectedBoard = _boards.first.code;
   String _selectedMenu = '공지사항';
   String _query = '';
@@ -113,6 +115,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   bool _loading = false;
   String? _deviceId;
   final _alarmBoards = <String>{};
+  StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
 
   @override
   void initState() {
@@ -126,6 +129,8 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
+    _foregroundMessageSubscription?.cancel();
     super.dispose();
   }
 
@@ -138,6 +143,9 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
     try {
       await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+      _foregroundMessageSubscription ??= FirebaseMessaging.onMessage.listen(
+        _handleForegroundMessage,
+      );
       final messaging = FirebaseMessaging.instance;
       await messaging.requestPermission();
       // The initial token is required before the device can receive a push.
@@ -167,15 +175,39 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
     }
   }
 
-  Future<void> _loadNotices() async {
+  Future<void> _handleForegroundMessage(RemoteMessage message) async {
+    await _loadNotices(resetPage: true);
+    final notification = message.notification;
+    await _native.invokeMethod<void>('showNotification', {
+      'title': notification?.title ?? '새 공지 알림',
+      'body': notification?.body ?? '새 공지사항이 등록되었습니다.',
+      'url': message.data['url'],
+    });
+  }
+
+  Future<void> _loadNotices({bool resetPage = false}) async {
     if (_apiUrl.isEmpty || widget.initialNotices != null) return;
+    if (resetPage) {
+      _scrollController.jumpTo(0);
+      setState(() => _page = 1);
+    }
     setState(() => _loading = true);
     try {
+      final boardCode = _selectedMenu == '공지사항' ? _selectedBoard : null;
       final page = await NoticeApiClient(
         baseUrl: _apiUrl,
         apiKey: _apiKey,
-      ).getNotices(limit: 100);
-      if (mounted) setState(() => _notices = page.items);
+      ).getNotices(boardCode: boardCode, limit: _pageSize);
+      if (mounted) {
+        setState(() {
+          _notices = boardCode == null
+              ? page.items
+              : [
+                  ..._notices.where((notice) => notice.boardCode != boardCode),
+                  ...page.items,
+                ];
+        });
+      }
     } catch (error) {
       developer.log('Notice loading failed: $error', name: 'dsu_notifier');
     } finally {
@@ -223,6 +255,8 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
       _selectedMenu = '공지사항';
       _page = 1;
     });
+    _scrollController.jumpTo(0);
+    _loadNotices(resetPage: true);
   }
 
   void _search() {
@@ -273,6 +307,8 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
       ).showSnackBar(const SnackBar(content: Text('테스트 알림을 보냈습니다.')));
     }
   }
+
+  Future<void> _refreshNotices() => _loadNotices(resetPage: true);
 
   @override
   Widget build(BuildContext context) {
@@ -417,15 +453,32 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
                 ? const Center(
                     child: CircularProgressIndicator(color: _DsuColors.primary),
                   )
-                : notices.isEmpty
-                ? const Center(child: Text('조건에 맞는 공지사항이 없습니다.'))
-                : ListView.separated(
-                    itemCount: notices.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, index) => NoticeCard(
-                      notice: notices[index],
-                      onTap: () => _openNotice(notices[index].url),
-                    ),
+                : RefreshIndicator(
+                    onRefresh: _refreshNotices,
+                    color: _DsuColors.primary,
+                    child: notices.isEmpty
+                        ? ListView(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: const [
+                              SizedBox(
+                                height: 180,
+                                child: Center(
+                                  child: Text('조건에 맞는 공지사항이 없습니다.'),
+                                ),
+                              ),
+                            ],
+                          )
+                        : ListView.separated(
+                            controller: _scrollController,
+                            itemCount: notices.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (_, index) => NoticeCard(
+                              notice: notices[index],
+                              onTap: () => _openNotice(notices[index].url),
+                            ),
+                          ),
                   ),
           ),
           const SizedBox(height: 12),

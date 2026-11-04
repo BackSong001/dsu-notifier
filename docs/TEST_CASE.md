@@ -100,6 +100,9 @@ Frontend의 시각 디자인과 레이아웃은 아직 확정하지 않는다. �
 | TC-FE-015 | Integration | 실제 테스트 Backend에서 공지 조회 | Fixture가 아닌 API 응답이 화면에 표시된다 |
 | TC-FE-016 | Integration | 새 공지 알림 수신 | 테스트 공지의 알림이 에뮬레이터에 표시된다 |
 | TC-FE-017 | Integration | 알림 또는 공지 클릭 | 해당 공지 URL이 외부 브라우저로 열린다 |
+| TC-FE-018 | Widget | 게시판 전환 | 목록을 다시 조회하고 1페이지 최상단으로 이동한다 |
+| TC-FE-019 | Widget | 당겨서 새로고침 | 현재 게시판의 첫 페이지를 다시 조회한다 |
+| TC-FE-020 | Integration | Foreground FCM 수신 | 목록을 자동 갱신하고 Android 알림을 표시한다 |
 
 Frontend 테스트는 다음 경계를 사용한다.
 

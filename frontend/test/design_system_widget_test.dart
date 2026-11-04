@@ -118,4 +118,16 @@ void main() {
     expect(cards.first.notice.isNotice, isTrue);
     expect(cards.last.notice.title, '신규 추가 공지');
   });
+
+  testWidgets('resets to the first page when switching boards', (tester) async {
+    await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('공지/행사'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('공지/행사 공지사항'), findsOneWidget);
+    expect(find.text('1 / 1 페이지'), findsOneWidget);
+    expect(find.byType(RefreshIndicator), findsOneWidget);
+  });
 }

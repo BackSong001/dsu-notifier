@@ -3,6 +3,7 @@ package com.dsu.notifier
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -23,6 +24,14 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "requestNotifications" -> result.success(requestNotifications())
                 "showTestNotification" -> { showTestNotification(); result.success(null) }
+                "showNotification" -> {
+                    showNotification(
+                        call.argument<String>("title") ?: "새 공지 알림",
+                        call.argument<String>("body") ?: "새 공지사항이 등록되었습니다.",
+                        call.argument<String>("url"),
+                    )
+                    result.success(null)
+                }
                 "openUrl" -> {
                     startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(call.argument<String>("url"))))
                     result.success(null)
@@ -48,14 +57,30 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun showTestNotification() {
+        showNotification("새 공지 알림", "테스트 공지사항이 등록되었습니다.", null)
+    }
+
+    private fun showNotification(title: String, body: String, url: String?) {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val intent = if (url != null) {
+            Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        } else {
+            Intent(this, MainActivity::class.java)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            title.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val notification = android.app.Notification.Builder(this, notificationChannel)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("새 공지 알림")
-            .setContentText("테스트 공지사항이 등록되었습니다.")
+            .setContentTitle(title)
+            .setContentText(body)
             .setPriority(android.app.Notification.PRIORITY_DEFAULT)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
-        getSystemService(NotificationManager::class.java).notify(103653, notification)
+        getSystemService(NotificationManager::class.java).notify(title.hashCode(), notification)
     }
 }
