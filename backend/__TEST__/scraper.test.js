@@ -63,3 +63,19 @@ test('deduplicates repeated source indexes', () => {
   assert.equal(notices.length, 2);
   assert.deepEqual(notices.map((notice) => notice.sourceIdx), ['103653', '103600']);
 });
+
+test('uses today date when a notice has a time-only published value', () => {
+  const notices = parseBoard(fixture.replace('2026-10-29', '09:54'), {
+    boardCode: 'MN2000194',
+    boardName: '학사',
+    pageUrl: 'https://www.dongseo.ac.kr/kr/?pCode=MN2000194',
+  });
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const date = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  assert.equal(notices[0].publishedAt, `${date.year}-${date.month}-${date.day}`);
+});

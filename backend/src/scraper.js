@@ -17,6 +17,18 @@ function cell(row, name) {
   return match ? decodeHtml(match[1]) : '';
 }
 
+function publishedDate(value) {
+  if (!/^\d{1,2}:\d{2}$/.test(value)) return value;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const date = Object.fromEntries(parts.map(({ type, value: part }) => [type, part]));
+  return `${date.year}-${date.month}-${date.day}`;
+}
+
 export function parseBoard(html, { boardCode, boardName, pageUrl }) {
   const rows = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map((match) => match[0]);
   const parsedNotices = rows.flatMap((row) => {
@@ -35,7 +47,7 @@ export function parseBoard(html, { boardCode, boardName, pageUrl }) {
       number: numberText ? Number(numberText) : null,
       title: decodeHtml(link[2]),
       author: cell(row, 'writer'),
-      publishedAt: cell(row, 'date'),
+      publishedAt: publishedDate(cell(row, 'date')),
       viewCount: Number(cell(row, '(?:hit|read)').replaceAll(',', '')) || 0,
       url: url.href,
       isNotice,
