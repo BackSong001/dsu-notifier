@@ -158,4 +158,4 @@ Flutter 항목 선택은 Android MethodChannel을 통해 `ACTION_VIEW`를 호출
 | Edge Function·PostgreSQL | 테스트 Supabase 프로젝트 | 원격 통합 실행 |
 | FCM·Android 권한·알림 탭 | 실제 Android 에뮬레이터 | 수동/통합 실행 |
 
-운영 10분 주기와 테스트 러너의 30초 주기는 구분한다. 테스트용 공지와 디바이스 토큰은 운영 데이터와 분리한다.
+운영 10분 주기와 테스트 환경의 1분 Cron 주기는 구분한다. 테스트용 공지와 디바이스 토큰은 운영 데이터와 분리한다. 통합테스트에서는 테스트 공지 발송 후 Android 에뮬레이터의 실제 알림 수신을 확인한다.

@@ -50,9 +50,9 @@
 | ID | 시나리오 | 기대 결과 |
 |---|---|---|
 | TC-JOB-001 | 운영 스케줄 설정 확인 | 수집 함수가 10분마다 실행되도록 설정된다 |
-| TC-JOB-002 | 테스트 스케줄 실행 | 테스트 환경에서 30초마다 수집 함수가 실행된다 |
+| TC-JOB-002 | 테스트 스케줄 실행 | 테스트 환경에서 1분마다 수집 함수가 실행된다 |
 | TC-JOB-003 | 같은 실행이 겹침 | 하나만 처리하고 중복 저장하지 않는다 |
-| TC-JOB-004 | 테스트 공지 추가 후 다음 30초 주기 | 새 공지가 감지되고 DB와 outbox에 한 번씩 생성된다 |
+| TC-JOB-004 | 테스트 공지 추가 후 다음 1분 주기 | 새 공지가 감지되고 DB와 outbox에 한 번씩 생성된다 |
 | TC-JOB-005 | 수집 중 타임아웃 | 실패를 기록하고 기존 데이터는 유지한다 |
 
 ## 6. 알림
@@ -64,7 +64,7 @@
 | TC-NOT-003 | 같은 공지 재시도 | 동일 디바이스에 중복 발송하지 않는다 |
 | TC-NOT-004 | FCM 일시 실패 | 제한된 횟수로 재시도하고 상태를 기록한다 |
 | TC-NOT-005 | 만료된 FCM 토큰 | 토큰을 비활성화한다 |
-| TC-NOT-006 | Android 13 이상 알림 권한 허용 | 에뮬레이터에서 새 공지 알림이 표시된다 |
+| TC-NOT-006 | Android 13 이상 알림 권한 허용 | 테스트 공지를 발송하고 에뮬레이터에서 실제 알림이 표시되는지 확인한다 |
 | TC-NOT-007 | Android 알림 탭 | 해당 공지 URL이 웹브라우저에서 열린다 |
 
 ## 7. 디바이스 API와 보안
@@ -113,7 +113,7 @@ Frontend 테스트는 다음 경계를 사용한다.
 1. scraper fixture 파싱 Red → Green → Refactoring
 2. 공지 저장과 고정 공지 상태 전이 Red → Green → Refactoring
 3. GET API와 실제 URL 접속 Red → Green → Refactoring
-4. 30초 테스트 수집과 테스트 공지 감지 Red → Green → Refactoring
+4. 1분 테스트 수집과 테스트 공지 감지 Red → Green → Refactoring
 5. Android 에뮬레이터 알림 권한·FCM·URL 열기 수동/통합 확인
 6. Frontend Client API 계약 Red → Green → Refactoring
 7. Frontend Widget 상태·필드 표시 Red → Green → Refactoring
