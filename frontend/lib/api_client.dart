@@ -25,11 +25,15 @@ class NoticeApiClient {
 
   Future<NoticePage> getNotices({
     String? boardCode,
+    String? deviceId,
+    bool alarmOnly = false,
     int limit = 20,
     String? cursor,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (boardCode != null) query['board_code'] = boardCode;
+    if (deviceId != null) query['device_id'] = deviceId;
+    if (alarmOnly) query['alarm_only'] = 'true';
     if (cursor != null) query['cursor'] = cursor;
     final uri = Uri.parse('$baseUrl/notices').replace(queryParameters: query);
     final json = await _fetch(uri);
@@ -58,6 +62,15 @@ class NoticeApiClient {
     Map<String, bool> boards,
   ) {
     return _send('/devices/$deviceId/preferences', 'PUT', {'boards': boards});
+  }
+
+  Future<Map<String, dynamic>> markNotificationsRead(
+    String deviceId,
+    List<String> noticeIds,
+  ) {
+    return _send('/devices/$deviceId/notifications/read', 'PUT', {
+      'notice_ids': noticeIds,
+    });
   }
 
   Future<Map<String, dynamic>> _send(

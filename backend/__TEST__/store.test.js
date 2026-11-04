@@ -34,3 +34,13 @@ test('lists pinned notices before newer normal notices', () => {
     ['고정 공지', '일반 공지'],
   );
 });
+
+test('does not rewrite an existing notice when a scrape finds no new notice', () => {
+  let now = 0;
+  const store = new NoticeStore({ now: () => `time-${++now}` });
+  store.saveBoard('MN2000194', [normal]);
+  const first = store.get('MN2000194', normal.sourceIdx);
+
+  assert.equal(store.saveBoard('MN2000194', [normal]).newCount, 0);
+  assert.deepEqual(store.get('MN2000194', normal.sourceIdx), first);
+});

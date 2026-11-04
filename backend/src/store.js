@@ -24,18 +24,29 @@ export class NoticeStore {
   }
 
   #storedNotice(key, previous, notice) {
+    if (previous) {
+      if (notice.isNotice && previous.importanceStatus === 'failed') {
+        return { ...previous, importanceStatus: 'true' };
+      }
+      return previous;
+    }
     return {
-        ...notice,
-        id: previous?.id ?? key,
-        importanceStatus: notice.isNotice ? 'true' : null,
-        firstCollectedAt: previous?.firstCollectedAt ?? this.#now(),
-        lastSeenAt: this.#now(),
-      };
+      ...notice,
+      id: key,
+      importanceStatus: notice.isNotice ? 'true' : null,
+      firstCollectedAt: this.#now(),
+      lastSeenAt: this.#now(),
+    };
   }
 
   #markMissingPinned(boardCode, seen) {
     for (const [key, notice] of this.#notices) {
-      if (notice.boardCode === boardCode && notice.isNotice && !seen.has(key)) {
+      if (
+        notice.boardCode === boardCode &&
+        notice.isNotice &&
+        notice.importanceStatus === 'true' &&
+        !seen.has(key)
+      ) {
         this.#notices.set(key, { ...notice, importanceStatus: 'failed' });
       }
     }

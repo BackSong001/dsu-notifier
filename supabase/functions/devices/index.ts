@@ -59,6 +59,23 @@ Deno.serve(async (request) => {
     return json({ saved: true });
   }
 
+  const readMatch = path.match(/^\/([^/]+)\/notifications\/read$/);
+  if (request.method === "PUT" && readMatch) {
+    const value = await body(request);
+    if (!Array.isArray(value?.notice_ids) || value.notice_ids.some((id: unknown) => typeof id !== "string")) {
+      return json({ error: "INVALID_NOTIFICATIONS", message: "notice_ids must be an array of strings" }, 400);
+    }
+    if (value.notice_ids.length) {
+      const { error } = await supabase
+        .from("notification_outbox")
+        .update({ read_at: new Date().toISOString() })
+        .eq("device_id", readMatch[1])
+        .in("notice_id", value.notice_ids);
+      if (error) return json({ error: "DATABASE_ERROR", message: error.message }, 500);
+    }
+    return json({ marked: true });
+  }
+
   const deviceMatch = path.match(/^\/([^/]+)$/);
   if (request.method === "DELETE" && deviceMatch) {
     const { error } = await supabase.from("devices").update({ active: false }).eq("device_id", deviceMatch[1]);

@@ -215,6 +215,42 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
     }
   }
 
+  Future<void> _loadAlarmNotices() async {
+    if (_apiUrl.isEmpty || widget.initialNotices != null) return;
+    if (_deviceId == null) {
+      setState(() => _notices = []);
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _page = 1;
+    });
+    try {
+      final page = await NoticeApiClient(
+        baseUrl: _apiUrl,
+        apiKey: _apiKey,
+      ).getNotices(deviceId: _deviceId, alarmOnly: true, limit: 100);
+      if (!mounted) return;
+      setState(() => _notices = page.items);
+      if (page.items.isNotEmpty) {
+        await NoticeApiClient(
+          baseUrl: _apiUrl,
+          apiKey: _apiKey,
+        ).markNotificationsRead(
+          _deviceId!,
+          page.items.map((notice) => notice.id).toList(),
+        );
+      }
+    } catch (error) {
+      developer.log(
+        'Alarm notice loading failed: $error',
+        name: 'dsu_notifier',
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   List<Notice> get _visibleNotices {
     final source = _selectedMenu == '알람공지'
         ? _notices.where((notice) => _alarmBoards.contains(notice.boardCode))
@@ -247,6 +283,15 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
       _selectedMenu = menu;
       _page = 1;
     });
+    if (menu == '알람공지') _loadAlarmNotices();
+  }
+
+  void _openAlarmNotices() {
+    setState(() {
+      _selectedMenu = '알람공지';
+      _page = 1;
+    });
+    _loadAlarmNotices();
   }
 
   void _selectBoard(String board) {
@@ -328,10 +373,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         actions: [
           IconButton(
             tooltip: '알람공지',
-            onPressed: () => setState(() {
-              _selectedMenu = '알람공지';
-              _page = 1;
-            }),
+            onPressed: _openAlarmNotices,
             icon: const Icon(Icons.notifications_active_outlined),
           ),
         ],

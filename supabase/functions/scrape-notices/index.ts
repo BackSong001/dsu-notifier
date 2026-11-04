@@ -39,23 +39,42 @@ Deno.serve(async (request) => {
         throw new Error(`HTTP ${response.status}`);
       }
       const notices = parseBoard(await response.text(), board);
-      const { data, error } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("notices")
-        .upsert(notices, { onConflict: "board_code,source_idx" })
-        .select("id, source_idx, is_notice");
+        .select("id, source_idx, is_notice, importance_status")
+        .eq("board_code", board.code)
+        .in("source_idx", notices.map((notice) => notice.source_idx));
+      if (existingError) throw existingError;
+      const existingBySource = new Map((existing ?? []).map((notice) => [notice.source_idx, notice]));
+      const newNotices = notices.filter((notice) => !existingBySource.has(notice.source_idx));
+      const { data, error } = newNotices.length
+        ? await supabase.from("notices").insert(newNotices).select("id, source_idx, is_notice")
+        : { data: [], error: null };
       if (error) throw error;
       for (const notice of data ?? []) {
         const { error: enqueueError } = await supabase.rpc("enqueue_notice_notifications", { notice_id_input: notice.id });
         if (enqueueError) throw enqueueError;
       }
 
+      for (const notice of notices.filter((notice) => notice.is_notice)) {
+        const previous = existingBySource.get(notice.source_idx);
+        if (previous?.importance_status === "failed") {
+          const { error: restoreError } = await supabase
+            .from("notices")
+            .update({ importance_status: "true" })
+            .eq("id", previous.id);
+          if (restoreError) throw restoreError;
+        }
+      }
+
       const seenPinned = new Set(notices.filter((notice) => notice.is_notice).map((notice) => notice.source_idx));
-      const { data: existingPinned, error: existingError } = await supabase
+      const { data: existingPinned, error: pinnedError } = await supabase
         .from("notices")
-        .select("id, source_idx")
+        .select("id, source_idx, importance_status")
         .eq("board_code", board.code)
-        .eq("is_notice", true);
-      if (existingError) throw existingError;
+        .eq("is_notice", true)
+        .eq("importance_status", "true");
+      if (pinnedError) throw pinnedError;
       for (const notice of existingPinned ?? []) {
         if (!seenPinned.has(notice.source_idx)) {
           const { error: updateError } = await supabase.from("notices").update({ importance_status: "failed" }).eq("id", notice.id);

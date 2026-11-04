@@ -15,6 +15,8 @@
 Query:
 
 - `board_code` optional
+- `device_id` optional, required with `alarm_only=true`
+- `alarm_only` optional, when `true` returns unread notices notified to the device
 - `limit` optional, 기본 20, 최대 100
 - `cursor` optional
 
@@ -95,6 +97,24 @@ Response `200`:
 디바이스와 FCM 토큰을 비활성화한다. 앱 삭제나 알림 해제 시 사용한다.
 
 Response `204`.
+
+## PUT `/devices/{device_id}/notifications/read`
+
+디바이스의 알람공지 목록을 확인 처리한다.
+
+Request:
+
+```json
+{
+  "notice_ids": ["notice-uuid"]
+}
+```
+
+Response `200`:
+
+```json
+{"marked":true}
+```
 
 ## 내부 함수
 
