@@ -64,6 +64,12 @@ class NoticeApiClient {
     return _send('/devices/$deviceId/preferences', 'PUT', {'boards': boards});
   }
 
+  Future<Map<String, bool>> getPreferences(String deviceId) async {
+    final json = await _get('/devices/$deviceId/preferences');
+    final boards = json['boards'] as Map<String, dynamic>? ?? {};
+    return boards.map((board, enabled) => MapEntry(board, enabled == true));
+  }
+
   Future<Map<String, dynamic>> markNotificationsRead(
     String deviceId,
     List<String> noticeIds,
@@ -94,6 +100,28 @@ class NoticeApiClient {
           : jsonDecode(body) as Map<String, dynamic>;
       if (response.statusCode < 200 || response.statusCode >= 300)
         throw Exception(result['error'] ?? 'HTTP ${response.statusCode}');
+      return result;
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<Map<String, dynamic>> _get(String path) async {
+    final client = HttpClient();
+    try {
+      final request = await client.getUrl(Uri.parse('$baseUrl$path'));
+      if (apiKey != null) {
+        request.headers.set('apikey', apiKey!);
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $apiKey');
+      }
+      final response = await request.close();
+      final body = await response.transform(utf8.decoder).join();
+      final result = body.isEmpty
+          ? <String, dynamic>{}
+          : jsonDecode(body) as Map<String, dynamic>;
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception(result['error'] ?? 'HTTP ${response.statusCode}');
+      }
       return result;
     } finally {
       client.close();

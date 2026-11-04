@@ -161,6 +161,14 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         fcmToken: token,
         platform: 'android',
       );
+      final preferences = await client.getPreferences(token);
+      _alarmBoards
+        ..clear()
+        ..addAll(
+          preferences.entries
+              .where((entry) => entry.value)
+              .map((entry) => entry.key),
+        );
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
         final url = message.data['url'];
         if (url is String) _openNotice(url);

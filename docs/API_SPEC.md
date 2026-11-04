@@ -92,6 +92,21 @@ Response `200`:
 {"saved":true}
 ```
 
+## GET `/devices/{device_id}/preferences`
+
+디바이스의 게시판별 알림 설정을 조회한다. 앱 재시작 시 알림 버튼 상태를 복원할 때 사용한다.
+
+Response `200`:
+
+```json
+{
+  "boards": {
+    "MN2000194": true,
+    "MN2000191": false
+  }
+}
+```
+
 ## DELETE `/devices/{device_id}`
 
 디바이스와 FCM 토큰을 비활성화한다. 앱 삭제나 알림 해제 시 사용한다.

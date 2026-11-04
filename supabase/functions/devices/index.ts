@@ -42,6 +42,16 @@ Deno.serve(async (request) => {
   }
 
   const preferenceMatch = path.match(/^\/([^/]+)\/preferences$/);
+  if (request.method === "GET" && preferenceMatch) {
+    const { data, error } = await supabase
+      .from("notification_preferences")
+      .select("board_code, enabled")
+      .eq("device_id", preferenceMatch[1]);
+    if (error) return json({ error: "DATABASE_ERROR", message: error.message }, 500);
+    return json({
+      boards: Object.fromEntries((data ?? []).map((item) => [item.board_code, item.enabled])),
+    });
+  }
   if (request.method === "PUT" && preferenceMatch) {
     const value = await body(request);
     if (!value?.boards || typeof value.boards !== "object" || Array.isArray(value.boards)) {
