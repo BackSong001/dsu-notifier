@@ -471,29 +471,34 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
                       child: Scrollbar(
                         controller: _scrollController,
                         thumbVisibility: true,
-                        child: notices.isEmpty
-                            ? ListView(
-                                controller: _scrollController,
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                children: const [
-                                  SizedBox(
-                                    height: 180,
-                                    child: Center(
-                                      child: Text('조건에 맞는 공지사항이 없습니다.'),
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: notices.isEmpty
+                              ? ListView(
+                                  controller: _scrollController,
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  children: const [
+                                    SizedBox(
+                                      height: 180,
+                                      child: Center(
+                                        child: Text('조건에 맞는 공지사항이 없습니다.'),
+                                      ),
                                     ),
+                                  ],
+                                )
+                              : ListView.separated(
+                                  controller: _scrollController,
+                                  itemCount: notices.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 12),
+                                  itemBuilder: (_, index) => NoticeCard(
+                                    notice: notices[index],
+                                    onTap: () =>
+                                        _openNotice(notices[index].url),
                                   ),
-                                ],
-                              )
-                            : ListView.separated(
-                                controller: _scrollController,
-                                itemCount: notices.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 12),
-                                itemBuilder: (_, index) => NoticeCard(
-                                  notice: notices[index],
-                                  onTap: () => _openNotice(notices[index].url),
                                 ),
-                              ),
+                        ),
                       ),
                     ),
                   ),
