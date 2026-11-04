@@ -62,6 +62,12 @@ flowchart LR
 
 앱에는 Supabase anon key만 포함한다. service role key와 FCM 서버 인증정보는 포함하지 않는다.
 
+### 테스트·운영 환경 분리
+
+테스트 Android 빌드는 `frontend/android/app/src/debug/google-services.json`과 저장소 루트 `.env.local`의 테스트 Supabase URL·anon key 및 외부 키를 사용한다. 테스트 데이터와 디바이스 토큰은 테스트 Supabase 프로젝트에만 저장한다.
+
+운영 Android 빌드는 `frontend/android/app/src/release/google-services.json`과 운영 Supabase URL·anon key를 사용한다. 운영용 service role key, FCM 인증정보, Cron 비밀값은 운영 Supabase Secrets/Vault에만 저장한다. 두 환경의 `google-services.json`과 `.env*` 파일은 Git에 커밋하지 않는다.
+
 ### 공지 수집과 저장
 
 1. Supabase Cron이 `scrape-notices`를 10분마다 호출한다.
