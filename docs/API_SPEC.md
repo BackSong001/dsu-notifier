@@ -15,8 +15,6 @@
 Query:
 
 - `board_code` optional
-- `device_id` optional, required with `alarm_only=true`
-- `alarm_only` optional, when `true` returns unread notices notified to the device
 - `limit` optional, 기본 20, 최대 100
 - `cursor` optional
 
@@ -42,6 +40,32 @@ Response `200`:
   ],
   "next_cursor": null
 }
+```
+
+## GET `/devices/{device_id}/notice-preferences`
+
+디바이스가 알람을 활성화한 공지 ID를 조회한다. 앱 재시작 시 공지 카드의 알람 버튼과 `알람설정` 목록을 복원할 때 사용한다.
+
+Response `200`:
+
+```json
+{"notice_ids":["notice-uuid"]}
+```
+
+## PUT `/devices/{device_id}/notice-preferences`
+
+공지 하나의 알람을 활성화하거나 비활성화한다.
+
+Request:
+
+```json
+{"notice_id":"notice-uuid","enabled":true}
+```
+
+Response `200`:
+
+```json
+{"saved":true}
 ```
 
 `number`는 번호가 없는 고정 공지에서 `null`이다. `importance_status`는 고정 공지에만 `true` 또는 `failed`를 사용하며, 일반 공지는 `null`이다.
@@ -94,7 +118,7 @@ Response `200`:
 
 ## GET `/devices/{device_id}/preferences`
 
-디바이스의 게시판별 알림 설정을 조회한다. 앱 재시작 시 알림 버튼 상태를 복원할 때 사용한다.
+디바이스의 기존 게시판별 푸시 구독 설정을 조회한다. 공지별 화면 설정은 `notice-preferences`를 사용한다.
 
 Response `200`:
 
@@ -112,24 +136,6 @@ Response `200`:
 디바이스와 FCM 토큰을 비활성화한다. 앱 삭제나 알림 해제 시 사용한다.
 
 Response `204`.
-
-## PUT `/devices/{device_id}/notifications/read`
-
-디바이스의 알람공지 목록을 확인 처리한다.
-
-Request:
-
-```json
-{
-  "notice_ids": ["notice-uuid"]
-}
-```
-
-Response `200`:
-
-```json
-{"marked":true}
-```
 
 ## 내부 함수
 

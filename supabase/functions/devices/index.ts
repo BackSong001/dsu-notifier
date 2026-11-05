@@ -69,21 +69,28 @@ Deno.serve(async (request) => {
     return json({ saved: true });
   }
 
-  const readMatch = path.match(/^\/([^/]+)\/notifications\/read$/);
-  if (request.method === "PUT" && readMatch) {
+  const noticePreferenceMatch = path.match(/^\/([^/]+)\/notice-preferences$/);
+  if (request.method === "GET" && noticePreferenceMatch) {
+    const { data, error } = await supabase
+      .from("notice_alarm_preferences")
+      .select("notice_id")
+      .eq("device_id", noticePreferenceMatch[1])
+      .eq("enabled", true);
+    if (error) return json({ error: "DATABASE_ERROR", message: error.message }, 500);
+    return json({ notice_ids: (data ?? []).map((item) => item.notice_id) });
+  }
+  if (request.method === "PUT" && noticePreferenceMatch) {
     const value = await body(request);
-    if (!Array.isArray(value?.notice_ids) || value.notice_ids.some((id: unknown) => typeof id !== "string")) {
-      return json({ error: "INVALID_NOTIFICATIONS", message: "notice_ids must be an array of strings" }, 400);
+    if (typeof value?.notice_id !== "string" || typeof value?.enabled !== "boolean") {
+      return json({ error: "INVALID_NOTICE_PREFERENCE", message: "notice_id and enabled are required" }, 400);
     }
-    if (value.notice_ids.length) {
-      const { error } = await supabase
-        .from("notification_outbox")
-        .update({ read_at: new Date().toISOString() })
-        .eq("device_id", readMatch[1])
-        .in("notice_id", value.notice_ids);
-      if (error) return json({ error: "DATABASE_ERROR", message: error.message }, 500);
-    }
-    return json({ marked: true });
+    const { error } = await supabase.from("notice_alarm_preferences").upsert({
+      device_id: noticePreferenceMatch[1],
+      notice_id: value.notice_id,
+      enabled: value.enabled,
+    });
+    if (error) return json({ error: "DATABASE_ERROR", message: error.message }, 500);
+    return json({ saved: true });
   }
 
   const deviceMatch = path.match(/^\/([^/]+)$/);

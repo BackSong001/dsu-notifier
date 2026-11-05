@@ -21,19 +21,34 @@ void main() {
 
   test('preserves a null number for a pinned notice', () async {
     final client = NoticeApiClient(
-      fetch: (uri) async => noticeResponse(noticeJson(
-        id: 'notice-2',
-        sourceIdx: '103600',
-        number: null,
-        title: '중요 학사 공지',
-        isNotice: true,
-        importanceStatus: 'true',
-      )),
+      fetch: (uri) async => noticeResponse(
+        noticeJson(
+          id: 'notice-2',
+          sourceIdx: '103600',
+          number: null,
+          title: '중요 학사 공지',
+          isNotice: true,
+          importanceStatus: 'true',
+        ),
+      ),
     );
 
     final result = await client.getNotices();
 
     expect(result.items.single.number, isNull);
     expect(result.items.single.importanceStatus, 'true');
+  });
+
+  test('gets enabled notice alarm preferences', () async {
+    final client = NoticeApiClient(
+      fetch: (uri) async => {
+        'notice_ids': ['notice-1', 'notice-2'],
+      },
+    );
+
+    expect(await client.getNoticePreferences('device-1'), {
+      'notice-1',
+      'notice-2',
+    });
   });
 }

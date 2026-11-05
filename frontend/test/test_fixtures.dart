@@ -30,6 +30,7 @@ Map<String, dynamic> noticeResponse(Map<String, dynamic> notice) => {
 };
 
 Notice makeNotice({
+  String id = 'notice-1',
   String title = 'Backend에서 받은 공지',
   int? number = 831,
   int viewCount = 1234,
@@ -38,6 +39,7 @@ Notice makeNotice({
 }) {
   return Notice.fromJson({
     ...noticeJson(
+      id: id,
       title: title,
       number: number,
       isNotice: isNotice,

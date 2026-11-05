@@ -115,6 +115,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   bool _loading = false;
   String? _deviceId;
   final _alarmBoards = <String>{};
+  final _savedNotices = <String>{};
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
 
   @override
@@ -161,14 +162,16 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         fcmToken: token,
         platform: 'android',
       );
-      final preferences = await client.getPreferences(token);
       _alarmBoards
         ..clear()
         ..addAll(
-          preferences.entries
-              .where((entry) => entry.value)
-              .map((entry) => entry.key),
+          (await client.getPreferences(
+            token,
+          )).entries.where((entry) => entry.value).map((entry) => entry.key),
         );
+      _savedNotices
+        ..clear()
+        ..addAll(await client.getNoticePreferences(token));
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
         final url = message.data['url'];
         if (url is String) _openNotice(url);
@@ -201,11 +204,32 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
     }
     setState(() => _loading = true);
     try {
+      if (_selectedMenu == '알람설정') {
+        if (_deviceId != null) {
+          final boards = await NoticeApiClient(
+            baseUrl: _apiUrl,
+            apiKey: _apiKey,
+          ).getPreferences(_deviceId!);
+          if (mounted) {
+            setState(() {
+              _alarmBoards
+                ..clear()
+                ..addAll(
+                  boards.entries
+                      .where((entry) => entry.value)
+                      .map((entry) => entry.key),
+                );
+            });
+          }
+        }
+        return;
+      }
       final boardCode = _selectedMenu == '공지사항' ? _selectedBoard : null;
-      final page = await NoticeApiClient(
-        baseUrl: _apiUrl,
-        apiKey: _apiKey,
-      ).getNotices(boardCode: boardCode, limit: _pageSize);
+      final page = await NoticeApiClient(baseUrl: _apiUrl, apiKey: _apiKey)
+          .getNotices(
+            boardCode: boardCode,
+            limit: _selectedMenu == '저장된 공지' ? 100 : _pageSize,
+          );
       if (mounted) {
         setState(() {
           _notices = boardCode == null
@@ -223,45 +247,9 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
     }
   }
 
-  Future<void> _loadAlarmNotices() async {
-    if (_apiUrl.isEmpty || widget.initialNotices != null) return;
-    if (_deviceId == null) {
-      setState(() => _notices = []);
-      return;
-    }
-    setState(() {
-      _loading = true;
-      _page = 1;
-    });
-    try {
-      final page = await NoticeApiClient(
-        baseUrl: _apiUrl,
-        apiKey: _apiKey,
-      ).getNotices(deviceId: _deviceId, alarmOnly: true, limit: 100);
-      if (!mounted) return;
-      setState(() => _notices = page.items);
-      if (page.items.isNotEmpty) {
-        await NoticeApiClient(
-          baseUrl: _apiUrl,
-          apiKey: _apiKey,
-        ).markNotificationsRead(
-          _deviceId!,
-          page.items.map((notice) => notice.id).toList(),
-        );
-      }
-    } catch (error) {
-      developer.log(
-        'Alarm notice loading failed: $error',
-        name: 'dsu_notifier',
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
   List<Notice> get _visibleNotices {
-    final source = _selectedMenu == '알람공지'
-        ? _notices.where((notice) => _alarmBoards.contains(notice.boardCode))
+    final source = _selectedMenu == '저장된 공지'
+        ? _notices.where((notice) => _savedNotices.contains(notice.id))
         : _notices.where((notice) => notice.boardCode == _selectedBoard);
     final query = _query.trim().toLowerCase();
     final notices = query.isEmpty
@@ -291,15 +279,15 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
       _selectedMenu = menu;
       _page = 1;
     });
-    if (menu == '알람공지') _loadAlarmNotices();
+    _loadNotices(resetPage: true);
   }
 
-  void _openAlarmNotices() {
+  void _openAlarmSettings() {
     setState(() {
-      _selectedMenu = '알람공지';
+      _selectedMenu = '알람설정';
       _page = 1;
     });
-    _loadAlarmNotices();
+    _loadNotices(resetPage: true);
   }
 
   void _selectBoard(String board) {
@@ -345,7 +333,37 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
       });
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('알림 설정을 저장하지 못했습니다: $error')));
+      ).showSnackBar(SnackBar(content: Text('알람 설정을 저장하지 못했습니다: $error')));
+    }
+  }
+
+  Future<void> _toggleSavedNotice(String noticeId) async {
+    final saved = !_savedNotices.contains(noticeId);
+    setState(() {
+      if (saved) {
+        _savedNotices.add(noticeId);
+      } else {
+        _savedNotices.remove(noticeId);
+      }
+    });
+    if (_deviceId == null || _apiUrl.isEmpty) return;
+    try {
+      await NoticeApiClient(
+        baseUrl: _apiUrl,
+        apiKey: _apiKey,
+      ).saveNoticePreference(_deviceId!, noticeId, saved);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        if (saved) {
+          _savedNotices.remove(noticeId);
+        } else {
+          _savedNotices.add(noticeId);
+        }
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('공지 저장에 실패했습니다: $error')));
     }
   }
 
@@ -380,8 +398,8 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: '알람공지',
-            onPressed: _openAlarmNotices,
+            tooltip: '알람설정',
+            onPressed: _openAlarmSettings,
             icon: const Icon(Icons.notifications_active_outlined),
           ),
         ],
@@ -398,6 +416,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   }
 
   Widget _buildContent(int pageCount) {
+    if (_selectedMenu == '알람설정') return _buildAlarmSettingsContent();
     final notices = _pageNotices;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
@@ -417,8 +436,10 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
             children: [
               Expanded(
                 child: Text(
-                  _selectedMenu == '알람공지'
-                      ? '알람공지'
+                  _selectedMenu == '알람설정'
+                      ? '알람설정'
+                      : _selectedMenu == '저장된 공지'
+                      ? '저장된 공지'
                       : '${_boardLabel(_selectedBoard)} 공지사항',
                   style: const TextStyle(
                     fontSize: 28,
@@ -446,8 +467,10 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
           ),
           const SizedBox(height: 6),
           Text(
-            _selectedMenu == '알람공지'
-                ? '알림을 설정한 게시판의 공지입니다.'
+            _selectedMenu == '알람설정'
+                ? '알림을 켠 게시판을 관리합니다.'
+                : _selectedMenu == '저장된 공지'
+                ? '별표를 누른 공지만 모아 보여드립니다.'
                 : '수업부터 졸업까지, 꼭 알아야 할 학사 소식',
             style: const TextStyle(color: _DsuColors.secondaryText),
           ),
@@ -546,6 +569,11 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
                                     notice: notices[index],
                                     onTap: () =>
                                         _openNotice(notices[index].url),
+                                    saved: _savedNotices.contains(
+                                      notices[index].id,
+                                    ),
+                                    onToggleSaved: () =>
+                                        _toggleSavedNotice(notices[index].id),
                                   ),
                                 ),
                         ),
@@ -563,6 +591,76 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
                 child: const Text('테스트'),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlarmSettingsContent() {
+    final boards = _boards
+        .where((board) => _alarmBoards.contains(board.code))
+        .toList();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '오늘의 알람',
+            style: TextStyle(
+              color: _DsuColors.primary,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '알람설정',
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              color: _DsuColors.text,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '알림을 켠 게시판을 관리합니다.',
+            style: TextStyle(color: _DsuColors.secondaryText),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: boards.isEmpty
+                ? const Center(child: Text('알림을 켠 게시판이 없습니다.'))
+                : ListView.separated(
+                    itemCount: boards.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (_, index) {
+                      final board = boards[index];
+                      return Card(
+                        margin: EdgeInsets.zero,
+                        color: _DsuColors.surface,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: _DsuColors.border),
+                        ),
+                        child: ListTile(
+                          title: Text(
+                            board.label,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          subtitle: const Text('게시판 전체 알림'),
+                          trailing: IconButton(
+                            tooltip: '${board.label} 알림 끄기',
+                            onPressed: () => _toggleBoardAlarm(board.code),
+                            color: _DsuColors.primary,
+                            icon: const Icon(Icons.notifications_active),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
         ],
       ),
     );
@@ -699,7 +797,8 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
             ),
             _menuTile('공지사항', Icons.campaign_outlined),
             _menuTile('학사별 공지사항', Icons.school_outlined, enabled: false),
-            _menuTile('알람공지', Icons.notifications_active_outlined),
+            _menuTile('알람설정', Icons.notifications_active_outlined),
+            _menuTile('저장된 공지', Icons.star_outline),
             _menuTile('키워드 알람', Icons.manage_search_outlined, enabled: false),
           ],
         ),
@@ -723,10 +822,18 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
 }
 
 class NoticeCard extends StatelessWidget {
-  const NoticeCard({super.key, required this.notice, required this.onTap});
+  const NoticeCard({
+    super.key,
+    required this.notice,
+    required this.onTap,
+    required this.saved,
+    required this.onToggleSaved,
+  });
 
   final Notice notice;
   final VoidCallback onTap;
+  final bool saved;
+  final VoidCallback onToggleSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -778,6 +885,13 @@ class NoticeCard extends StatelessWidget {
                         ],
                       ),
                     ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: saved ? '저장 취소' : '공지 저장',
+                    onPressed: onToggleSaved,
+                    color: saved ? _DsuColors.primary : _DsuColors.tertiaryText,
+                    icon: Icon(saved ? Icons.star : Icons.star_border),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),

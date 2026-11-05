@@ -8,7 +8,8 @@ import 'test_fixtures.dart';
 void main() {
   final notices = List<Notice>.generate(
     21,
-    (index) => makeNotice(title: '공지 $index', number: index + 1),
+    (index) =>
+        makeNotice(id: 'notice-$index', title: '공지 $index', number: index + 1),
   );
 
   testWidgets('renders 19 notices and moves through bottom pagination', (
@@ -44,7 +45,7 @@ void main() {
     expect(find.text('공지 20'), findsOneWidget);
   });
 
-  testWidgets('searches notices and shows alarm notices from the menu', (
+  testWidgets('searches notices and opens alarm settings from the menu', (
     tester,
   ) async {
     await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
@@ -58,40 +59,60 @@ void main() {
 
     await tester.tap(find.byTooltip('Open navigation menu'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('알람공지'));
+    await tester.tap(find.text('알람설정'));
     await tester.pumpAndSettle();
-    expect(find.text('알람공지'), findsOneWidget);
-    expect(find.text('조건에 맞는 공지사항이 없습니다.'), findsOneWidget);
+    expect(find.text('알람설정'), findsOneWidget);
+    expect(find.text('알림을 켠 게시판이 없습니다.'), findsOneWidget);
   });
 
-  testWidgets('turns on a board alarm and lists its notices', (tester) async {
+  testWidgets('turns on a board alarm and lists that board', (tester) async {
     await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
     await tester.pumpAndSettle();
 
     expect(find.text('모집'), findsOneWidget);
     expect(find.byTooltip('학사 알림 켜기'), findsOneWidget);
-    expect(find.byTooltip('알림 켜기'), findsNothing);
     await tester.tap(find.byTooltip('학사 알림 켜기'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('학사 알림 끄기'), findsOneWidget);
     await tester.tap(find.byTooltip('Open navigation menu'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('알람공지'));
+    await tester.tap(find.text('알람설정'));
     await tester.pumpAndSettle();
 
-    expect(find.text('공지 0'), findsOneWidget);
-    expect(find.text('알림을 설정한 게시판의 공지입니다.'), findsOneWidget);
+    expect(find.text('학사'), findsOneWidget);
+    expect(find.text('게시판 전체 알림'), findsOneWidget);
   });
 
-  testWidgets('opens alarm notices from the app bar button', (tester) async {
+  testWidgets('opens alarm settings from the app bar button', (tester) async {
     await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('알람공지'));
+    await tester.tap(find.byTooltip('알람설정'));
     await tester.pumpAndSettle();
 
-    expect(find.text('알람공지'), findsOneWidget);
-    expect(find.text('알림을 설정한 게시판의 공지입니다.'), findsOneWidget);
+    expect(find.text('알람설정'), findsOneWidget);
+    expect(find.text('알림을 켠 게시판이 없습니다.'), findsOneWidget);
+  });
+
+  testWidgets('saves a notice with the star and lists it in saved notices', (
+    tester,
+  ) async {
+    await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('공지 저장'), findsOneWidget);
+    await tester.tap(find.byTooltip('공지 저장'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('저장 취소'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('저장된 공지'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('저장된 공지'), findsOneWidget);
+    expect(find.text('공지 0'), findsOneWidget);
+    expect(find.text('별표를 누른 공지만 모아 보여드립니다.'), findsOneWidget);
   });
 
   testWidgets('keeps pinned notices before newer normal notices', (
