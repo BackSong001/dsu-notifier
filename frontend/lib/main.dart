@@ -147,7 +147,6 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   final _savingBoards = <String>{};
   final _savingNotices = <String>{};
   StreamSubscription<String>? _tokenSubscription;
-  StreamSubscription<RemoteMessage>? _openedSubscription;
   bool get _fixtureMode => widget.initialNotices != null;
   bool get _canSave => _fixtureMode || (_deviceId != null && _preferencesReady);
   final _alarmBoards = <String>{};
@@ -177,7 +176,6 @@ class _NoticeHomePageState extends State<NoticeHomePage>
     _scrollController.dispose();
     _foregroundMessageSubscription?.cancel();
     _tokenSubscription?.cancel();
-    _openedSubscription?.cancel();
     super.dispose();
   }
 
@@ -288,17 +286,6 @@ class _NoticeHomePageState extends State<NoticeHomePage>
       _tokenSubscription?.cancel();
       // ignore: deprecated_member_use
       _tokenSubscription = messaging.onTokenRefresh.listen(register);
-      void openMessage(RemoteMessage message) {
-        final url = message.data['url'];
-        if (url is String) _openNotice(url);
-      }
-
-      _openedSubscription?.cancel();
-      _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
-        openMessage,
-      );
-      final initial = await messaging.getInitialMessage();
-      if (initial != null) openMessage(initial);
     } catch (_) {
       if (mounted) setState(() => _pushError = '알림 연결에 실패했습니다. 다시 연결해 주세요.');
     } finally {
@@ -559,11 +546,22 @@ class _NoticeHomePageState extends State<NoticeHomePage>
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if (!_permissionGranted) {
-                        _native.invokeMethod<void>('openNotificationSettings');
+                        try {
+                          await _native.invokeMethod<void>(
+                            'openNotificationSettings',
+                          );
+                        } on PlatformException catch (error) {
+                          if (mounted)
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('알림 설정을 열 수 없습니다: ${error.code}'),
+                              ),
+                            );
+                        }
                       } else {
-                        _registerForPush();
+                        await _registerForPush();
                       }
                     },
                     child: Text(!_permissionGranted ? '설정 열기' : '다시 연결'),

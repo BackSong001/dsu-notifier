@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.widget.Toast
 import android.provider.Settings
 import java.util.UUID
 import java.security.SecureRandom
@@ -20,6 +22,27 @@ class MainActivity : FlutterActivity() {
     private val channelName = "dsu_notifier/native"
     private val notificationChannel = "new_notices"
     private val permissionRequest = 1001
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        openNotificationIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openNotificationIntent(intent)
+    }
+
+    private fun openNotificationIntent(intent: Intent) {
+        if (!intent.hasExtra("google.message_id") && !intent.hasExtra("message_id")) return
+        val uri = safeNoticeUri(intent.getStringExtra("url")) ?: return
+        intent.removeExtra("url")
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (_: android.content.ActivityNotFoundException) {
+            Toast.makeText(this, "공지 링크를 열 수 있는 브라우저가 없습니다.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -34,8 +57,17 @@ class MainActivity : FlutterActivity() {
                     result.success(mapOf("id" to id, "secret" to secret))
                 }
                 "openNotificationSettings" -> {
-                    startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
-                    result.success(null)
+                    val settingsIntent = if (Build.VERSION.SDK_INT >= 26) {
+                        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                    } else {
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+                    }
+                    try {
+                        startActivity(settingsIntent)
+                        result.success(null)
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        result.error("SETTINGS_UNAVAILABLE", "Notification settings are unavailable", null)
+                    }
                 }
                 "requestNotifications" -> result.success(requestNotifications())
                 "showTestNotification" -> { showTestNotification(); result.success(null) }
@@ -100,7 +132,12 @@ class MainActivity : FlutterActivity() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val notification = android.app.Notification.Builder(this, notificationChannel)
+        val builder = if (Build.VERSION.SDK_INT >= 26) {
+            android.app.Notification.Builder(this, notificationChannel)
+        } else {
+            android.app.Notification.Builder(this)
+        }
+        val notification = builder
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)

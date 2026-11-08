@@ -2,16 +2,16 @@
 
 ## 배포 전제
 
-운영 대상은 사용자 소유의 DSU 전용 Supabase·Firebase 프로젝트다. `.env.local`과 debug Firebase는 테스트용이며 운영으로 복사하지 않는다. 현재 CLI에 표시되는 다른 앱 프로젝트를 배포 대상으로 사용하면 안 된다.
+운영 대상은 `.env`에 지정한 DSU 전용 Supabase 프로젝트다. 이번 배포는 사용자 요청에 따라 기존 Firebase 프로젝트를 재사용한다. Supabase 테스트 데이터와 디바이스 토큰은 운영 프로젝트와 분리한다. 다른 앱 프로젝트를 배포 대상으로 사용하지 않는다.
 
-운영 공개는 아직 완료되지 않았다. 아래 절차에는 운영 프로젝트 접근 권한, release Firebase 설정, Android 서명 키가 필요하다. 개인 APK 배포와 Play Store 공개 중 최종 방식도 확정해야 한다.
+배포 방식은 개인 설치용 서명 APK다. 운영 DB·Edge Functions·Cron 배포는 완료했으며 아래 검증 기록과 설치 산출물을 확인한다. Play Store 공개는 이번 범위에 포함하지 않는다.
 
 이 버전은 로그인 없이 설치 UUID와 별도 비밀값으로 디바이스를 인증한다. 구버전 앱의 인증 없는 디바이스 API 요청은 401이 된다. 개인 기기의 앱 업데이트와 아래 데이터 이전을 같은 배포 작업으로 진행한다.
 
 ## 설정
 
-1. `.env.production.example`을 `.env.production`으로 복사하고 운영 값만 넣는다. FCM 비밀키는 따옴표로 감싼 한 줄의 `\n` 이스케이프 형식으로 보관한다. Cron secret 두 개는 각각 무작위 32바이트 이상으로 생성한다.
-2. 운영 Firebase의 Android 앱 ID는 `com.dsu.notifier`다. 설정 파일은 `frontend/android/app/src/release/google-services.json`에 둔다.
+1. `.env.production.example`을 참고해 운영 값을 로컬 환경 파일에 넣는다. 이번 배포는 사용자가 지정한 `.env`를 사용한다. FCM 비밀키는 따옴표로 감싼 한 줄의 `\n` 이스케이프 형식으로 보관한다. Cron secret 두 개는 각각 무작위 32바이트 이상으로 생성한다.
+2. 기존 Firebase를 재사용하도록 지정됐으며 Android 앱 ID는 `com.dsu.notifier`다. 설정 파일은 `frontend/android/app/src/release/google-services.json`에 둔다.
 3. `frontend/android/key.properties.example`을 `key.properties`로 복사하고 별도 보관하는 릴리스 keystore 경로·암호를 넣는다. 서명 키는 백업한다. 같은 앱을 업데이트하려면 같은 키가 필요하다.
 4. Supabase CLI로 DSU 운영 프로젝트에 접근할 수 있는지 확인한다. 비밀값과 JSON 설정·서명 키는 Git에 넣지 않는다.
 
@@ -23,9 +23,13 @@ npm test
 npx --yes deno test --allow-read --no-lock backend/__TEST__/edge
 npx --yes deno check --node-modules-dir=auto --no-lock supabase/functions/*/index.ts
 npm run test:db
+python3 frontend/test/android_release_config_test.py
 cd frontend
 flutter test
 flutter analyze
+cd android
+./gradlew :app:lintRelease
+cd ../..
 ```
 
 `test:db`는 Docker의 임시 DB에 모든 migration을 적용해 RLS/RPC 권한, 공지와 outbox의 원자성, 고정 상태 전이와 동시 발송 claim을 검증하고 컨테이너를 삭제한다. 외부 사이트 테스트는 별도로 실행한다.
@@ -56,6 +60,11 @@ where command like '%/scrape-notices%' or command like '%/dispatch-notifications
 이미 `pg_net`에 큐잉된 HTTP 요청과 실행 중인 구버전 Edge Function이 모두 끝났는지 확인한 뒤 진행한다. Cron 중지만으로 이미 시작된 발송이 종료되지는 않는다. Supabase Edge 실행 이력/로그에서 진행 중 요청이 없는지 확인하고, 종료를 확인할 수 없으면 마이그레이션과 관리자 이전을 시작하지 않는다. 이 순서는 구 발송기가 읽어 둔 pending을 새 발송기가 다시 보내는 것을 막는다.
 
 ```bash
+set +x
+set -a
+source .env
+set +a
+export SUPABASE_DB_PASSWORD="${SUPABASE_DB_PASSWORD:-$SUPABASE_DATABASE_SECRET}"
 npx supabase projects list
 npx supabase link --project-ref <DSU_PROJECT_REF>
 npx supabase db push --dry-run
@@ -131,7 +140,7 @@ commit;
 
 ```bash
 set -a
-source .env.production
+source .env
 set +a
 cd frontend
 flutter build apk --release \
@@ -150,7 +159,7 @@ Play Store용은 같은 옵션으로 `flutter build appbundle --release`를 실�
 - DB 테이블이나 기존 migration을 삭제·되돌리지 않는다. 검증한 이전 Edge 버전을 재배포하더라도 인증 없는 구버전 `devices` API와 RLS 해제를 되살리지 않는다. 보안 호환이 안 되는 경우 Cron을 중단하고 전진 수정한다.
 - 앱은 같은 서명 키와 증가한 versionCode로 복구 버전을 배포한다. Play Store 공개 시 개인정보처리방침과 데이터 보안 양식을 실제 기기 ID·FCM 토큰·설정 저장 범위에 맞게 작성한다.
 
-## 2026-11-08 검증 기록
+## 초기 개발 단계 검증 기록(운영 배포 전)
 
 - Node 단위 테스트 13개, 운영 Edge 공통 로직 테스트 5개 통과.
 - Flutter Widget/Client 테스트 16개 및 `flutter analyze` 통과. 320dp·2배 글자·키보드 표시 회귀 검사 포함.
@@ -159,9 +168,9 @@ Play Store용은 같은 옵션으로 `flutter build appbundle --release`를 실�
 - 외부 동서대학교 6개 게시판 파싱 통과, 로컬 수집 함수가 128건 저장.
 - Android 디버그 APK 빌드·설치 후 게시판 알림/별표 저장의 서버 반영 확인. 테스트 FCM 1건 `sent=1, failed=0` 및 Android notification record의 실제 제목 표시 확인.
 - 리뷰어 t3w가 코드와 배포 순서를 검토했고 발견 사항을 반영했다. 현재 터미널 t3x는 메인 구현 담당이다.
-- 운영 배포, 운영 Cron 실행, 서명된 release 실행 검증은 미완료다. 현재 운영 프로젝트 접근 권한·release Firebase·서명 키가 없다. Background/종료 상태 FCM과 해당 상태의 알림 탭은 서명된 기기 최종 검증에 남긴다.
+- 당시 운영 배포, 운영 Cron 실행, 서명된 release 실행 검증은 미완료였고 운영 프로젝트 접근 권한·release Firebase·서명 키가 없었다. Background/종료 상태 FCM과 해당 상태의 알림 탭은 서명된 기기 최종 검증에 남긴다.
 
-## 후속 릴리스 준비
+## 0.1.0 릴리스 준비 당시 기록
 
 사용자가 개인 설치용 APK 배포, 운영 `.env` 사용, 기존 Firebase 프로젝트 재사용과 신규 서명 키 생성을 지정했다. 이에 따라 기존 Firebase Android 설정을 release 경로에 복사하고, 신규 릴리스 키와 `android/key.properties`, 누락된 운영 Cron secret을 로컬에 생성했다. 비밀 파일과 서명 키는 Git에 포함하지 않는다. 서비스 계정 JSON 없이 기존 `.env`의 FCM 인증정보를 사용한다.
 
@@ -170,4 +179,32 @@ Play Store용은 같은 옵션으로 `flutter build appbundle --release`를 실�
 - APK SHA-256: `29f0792f2c5aee30bd66cc5a812da150b5348d9e9bd33761b1dbed7d8a1c2801`.
 - 서명 인증서 SHA-256: `8c6b5c4b177a015b0dc3e4a0aed91d2895bfd8770174b6003f06b93105227d67`. keystore는 홈 디렉터리의 `.android/keystores/dsu-notifier-release.jks`, 암호는 Git에서 제외된 `frontend/android/key.properties`에 저장한다. 두 파일을 안전하게 백업해야 같은 앱을 업데이트할 수 있다.
 - AVD 이름을 확인한 `dsu_nofiter`에만 서명 APK를 설치하고 실행했다. 이후 연결 해제로 화면·권한·FCM의 릴리스 최종 검증은 아직 미완료다. 다른 AVD에는 설치하지 않았다.
-- 현재 CLI 계정에는 다른 프로젝트만 보이고, 운영 프로젝트의 Functions 조회가 `403`으로 거절된다. 운영 프로젝트 소유 계정의 CLI 로그인 또는 프로젝트 접근권한이 확보되기 전에는 DB/Edge/Cron 배포를 실행하지 않았다. APK가 생성된 것이 백엔드 배포 완료를 의미하지 않는다.
+- 당시 CLI 계정에는 다른 프로젝트만 보였고, 운영 프로젝트의 Functions 조회가 `403`으로 거절됐다. 운영 프로젝트 소유 계정의 CLI 로그인 또는 프로젝트 접근권한이 확보되기 전에는 DB/Edge/Cron 배포를 실행하지 않았다. APK가 생성된 것이 백엔드 배포 완료를 의미하지 않는다.
+
+## 운영 배포 완료 및 0.1.1 검증
+
+운영 프로젝트는 `kxdumukxhocegsnbcfmz` (`dsu_nofiter`)다. `.env`의 프로젝트 권한이 있는 `SUPABASE_ACCESS_TOKEN`을 명시적으로 사용해 배포했다. 이 토큰은 앱 빌드 변수와 Supabase Edge Secrets에 포함하지 않는다.
+
+- 기존 데이터·함수·Cron이 없는 최초 배포 상태를 확인한 후 migration 6개, Edge Functions 4개, 사용자 서버 Secrets 5개와 Vault 항목 3개를 적용했다.
+- 6개 게시판 공지 128건을 최초 수집했다. 재수집에도 중복 공지·outbox가 생성되지 않았으며 수집 실패 0건을 확인했다.
+- 운영 Cron은 수집 `*/10 * * * *`, 발송 `* * * * *`다. 정규 `2026-11-08 02:50 UTC` 수집 작업의 succeeded·HTTP 200·6개 게시판 success를 모두 확인했다. 이후 정기 실행도 정상이다.
+- 운영 목록·게시판·검색·공지 상세·커서의 중복 없는 다음 페이지 조회, 잘못된 입력 400, 내부 함수의 무인증 요청 401을 확인했다. private 테이블 RLS와 공개 역할의 RPC 실행 차단도 확인했다.
+- 테스트 공지와 토큰은 별도 로컬 Supabase에만 등록했다. 검증 중 운영 `devices`와 `notification_outbox`는 0건을 유지했다. 운영과 동일한 FCM 인증정보로 테스트 서버에서 실제 발송했다.
+- `dsu_nofiter` AVD에만 서명된 release 테스트 빌드를 설치했다. foreground·background·프로세스 종료 상태의 FCM 수신·알림 표시, background·종료 알림 탭의 정확한 현재 브라우저 URL을 확인했다. 종료 시험은 force-stop 대신 background 전환 후 프로세스 종료를 확인해 진행했다.
+- 알림 탭은 Android `onCreate`·`onNewIntent`에서 기존 허용 URL 검증과 외부 브라우저 실행을 사용한다. Dart의 중복 알림 탭 처리를 제거했다. 알림은 Google message ID와 URL이 있는 Intent만 처리하고, https·허용 호스트·사용자정보 없음·기본 포트 조건을 유지한다.
+- `frontend/test/android_notification_smoke.mjs`는 서로 다른 공지의 cold/warm Intent와 허용외 호스트 거부를 검증한다. 과거 task 이력 대신 Chrome DevTools의 현재 visible 탭 URL을 검사한다. 실제 FCM 검증은 별도이며 합성 Intent 통과만으로 판정하지 않았다.
+- 에뮬레이터 Quickboot의 오래된 Google 푸시 연결은 해당 AVD의 네트워크 재연결로 해소했다. Chrome 시작 화면은 테스트 중에만 명령줄 설정으로 건너뛰었으며 검사 후 원래 설정으로 복구한다. 약관·계정 로그인에 대신 동의하지 않았다.
+
+최신 개인 설치 산출물은 `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.1-release.apk`다. `versionName=0.1.1`, `versionCode=2`, minSdk 24, targetSdk 35이며 기존 생성한 릴리스 서명을 사용한다. APK SHA-256은 `a9f674565fb7f70c19f2f5197d35c66dc1dfca326032c881c791efcdc580bc28`다. 서명과 서버 비밀값·관리 토큰의 APK 미포함 검사를 통과했다. 이전 0.1.0 산출물 대신 이 파일을 설치한다.
+
+앱 설치 후 알림 권한을 허용하고 원하는 게시판 제목 옆 종 버튼을 켠다. 별표 저장은 푸시 구독과 별개다. 실제 개인 휴대폰 설치·절전 정책에 따른 수신은 사용 기기에서 추가 확인한다. 서명 키와 `android/key.properties`를 안전하게 백업한다.
+
+Android Intent 회귀 검사는 Chrome과 테스트용 release 앱이 준비된 `dsu_nofiter`에서 실행한다. Node 24의 내장 WebSocket과 adb를 사용하며 임시 포워딩 포트는 검사 후 제거한다.
+
+```bash
+node frontend/test/android_notification_smoke.mjs
+```
+
+검증 후 이 실행에서 만든 로컬 테스트 공지·디바이스 등록을 삭제했다. Chrome의 임시 명령줄·디버그 설정을 복구하고 임시 포워딩, 로컬 Edge 개발 서버, 테스트용 Supabase 컨테이너와 이 실행에서 시작한 `dsu_nofiter` 에뮬레이터를 종료했다. 운영 Supabase와 두 Cron 작업은 계속 활성화돼 있다. 실제 개인 휴대폰은 아직 연결하지 않아 실기기 설치 확인은 사용자 기기에서 진행한다.
+
+최종 호환성 검사에서 API24/25는 채널 없는 Notification.Builder와 앱 상세 설정 화면을 사용하도록 보강했다. API26 이상은 알림 채널·전용 알림 설정을 유지한다. 설정 화면을 제공하지 않는 기기에서는 원문 오류 코드와 한국어 안내를 표시한다. Android12 이상의 백업·기기 이전에서도 `device_identity.xml`을 제외하도록 명시했으며 `frontend/test/android_release_config_test.py`로 설치 인증정보의 복제 금지 규칙을 검증한다.

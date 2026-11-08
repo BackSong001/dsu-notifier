@@ -49,9 +49,14 @@ flutter build apk --debug \
 npm test
 npx --yes deno test --allow-read --no-lock backend/__TEST__/edge
 npm run test:db
+python3 frontend/test/android_release_config_test.py
 cd frontend
 flutter test
 flutter analyze
 ```
 
 운영은 10분 수집·1분 발송/재시도다. 앱은 설치별 UUID와 인증 비밀값을 사용하며, 게시판 알림과 별표 저장을 따로 관리한다. 새 공지 삽입과 outbox는 같은 트랜잭션에서 처리한다. 결과가 불명확한 FCM 요청은 중복 방지를 위해 자동 재전송하지 않는다.
+
+## 개인 설치 APK
+
+운영 Supabase의 DB·Edge Functions·Cron 배포를 완료했다. 최신 서명 APK는 로컬 `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.1-release.apk`이며 버전은 `0.1.1+2`다. 설치 후 알림 권한을 허용하고 게시판별 종 버튼으로 구독한다. 배포 증거와 서명 키 백업·복구 절차는 [출시 문서](docs/RELEASE.md)를 따른다.

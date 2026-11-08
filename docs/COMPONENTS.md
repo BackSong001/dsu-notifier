@@ -91,7 +91,7 @@ flowchart LR
 
 ### 공지 열기
 
-Flutter 항목 선택은 Android MethodChannel을 통해 `ACTION_VIEW`를 호출한다. 상세 공지 URL은 Android 외부 브라우저에서 열린다.
+Flutter 항목 선택은 Android MethodChannel을 통해 `ACTION_VIEW`를 호출한다. background·종료 알림 탭은 Android Activity의 `onCreate`·`onNewIntent`에서 처리한다. 두 경로는 같은 허용 URL 검증을 사용하며 상세 공지는 Android 외부 브라우저에서 열린다.
 
 ## 4. 데이터 책임과 불변식
 
