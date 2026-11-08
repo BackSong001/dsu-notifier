@@ -160,3 +160,14 @@ Play Store용은 같은 옵션으로 `flutter build appbundle --release`를 실�
 - Android 디버그 APK 빌드·설치 후 게시판 알림/별표 저장의 서버 반영 확인. 테스트 FCM 1건 `sent=1, failed=0` 및 Android notification record의 실제 제목 표시 확인.
 - 리뷰어 t3w가 코드와 배포 순서를 검토했고 발견 사항을 반영했다. 현재 터미널 t3x는 메인 구현 담당이다.
 - 운영 배포, 운영 Cron 실행, 서명된 release 실행 검증은 미완료다. 현재 운영 프로젝트 접근 권한·release Firebase·서명 키가 없다. Background/종료 상태 FCM과 해당 상태의 알림 탭은 서명된 기기 최종 검증에 남긴다.
+
+## 후속 릴리스 준비
+
+사용자가 개인 설치용 APK 배포, 운영 `.env` 사용, 기존 Firebase 프로젝트 재사용과 신규 서명 키 생성을 지정했다. 이에 따라 기존 Firebase Android 설정을 release 경로에 복사하고, 신규 릴리스 키와 `android/key.properties`, 누락된 운영 Cron secret을 로컬에 생성했다. 비밀 파일과 서명 키는 Git에 포함하지 않는다. 서비스 계정 JSON 없이 기존 `.env`의 FCM 인증정보를 사용한다.
+
+- 운영 URL의 프로젝트 ID: `kxdumukxhocegsnbcfmz`. 공개 API 키와 서버 키의 접근을 확인했으며 아직 공지 테이블이 없는 빈 프로젝트다.
+- 신규 서명 APK: `frontend/build/app/outputs/flutter-apk/app-release.apk` (버전 `0.1.0+1`). 서명 검증과 서버 비밀값 미포함 검사를 통과했다.
+- APK SHA-256: `29f0792f2c5aee30bd66cc5a812da150b5348d9e9bd33761b1dbed7d8a1c2801`.
+- 서명 인증서 SHA-256: `8c6b5c4b177a015b0dc3e4a0aed91d2895bfd8770174b6003f06b93105227d67`. keystore는 홈 디렉터리의 `.android/keystores/dsu-notifier-release.jks`, 암호는 Git에서 제외된 `frontend/android/key.properties`에 저장한다. 두 파일을 안전하게 백업해야 같은 앱을 업데이트할 수 있다.
+- AVD 이름을 확인한 `dsu_nofiter`에만 서명 APK를 설치하고 실행했다. 이후 연결 해제로 화면·권한·FCM의 릴리스 최종 검증은 아직 미완료다. 다른 AVD에는 설치하지 않았다.
+- 현재 CLI 계정에는 다른 프로젝트만 보이고, 운영 프로젝트의 Functions 조회가 `403`으로 거절된다. 운영 프로젝트 소유 계정의 CLI 로그인 또는 프로젝트 접근권한이 확보되기 전에는 DB/Edge/Cron 배포를 실행하지 않았다. APK가 생성된 것이 백엔드 배포 완료를 의미하지 않는다.
