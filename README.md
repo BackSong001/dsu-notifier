@@ -59,4 +59,4 @@ flutter analyze
 
 ## 개인 설치 APK
 
-운영 Supabase의 DB·Edge Functions·Cron 배포를 완료했다. 최신 서명 APK는 로컬 `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.1-release.apk`이며 버전은 `0.1.1+2`다. 설치 후 알림 권한을 허용하고 게시판별 종 버튼으로 구독한다. 배포 증거와 서명 키 백업·복구 절차는 [출시 문서](docs/RELEASE.md)를 따른다.
+운영 Supabase의 DB·Edge Functions·Cron 배포를 완료했다. 최신 서명 APK는 로컬 `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.2-release.apk`이며 버전은 `0.1.2+3`다. 설치 후 알림 권한을 허용하고 게시판별 종 버튼으로 구독한다. 배포 증거와 서명 키 백업·복구 절차는 [출시 문서](docs/RELEASE.md)를 따른다.

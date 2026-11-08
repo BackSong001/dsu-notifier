@@ -195,7 +195,7 @@ Play Store용은 같은 옵션으로 `flutter build appbundle --release`를 실�
 - `frontend/test/android_notification_smoke.mjs`는 서로 다른 공지의 cold/warm Intent와 허용외 호스트 거부를 검증한다. 과거 task 이력 대신 Chrome DevTools의 현재 visible 탭 URL을 검사한다. 실제 FCM 검증은 별도이며 합성 Intent 통과만으로 판정하지 않았다.
 - 에뮬레이터 Quickboot의 오래된 Google 푸시 연결은 해당 AVD의 네트워크 재연결로 해소했다. Chrome 시작 화면은 테스트 중에만 명령줄 설정으로 건너뛰었으며 검사 후 원래 설정으로 복구한다. 약관·계정 로그인에 대신 동의하지 않았다.
 
-최신 개인 설치 산출물은 `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.1-release.apk`다. `versionName=0.1.1`, `versionCode=2`, minSdk 24, targetSdk 35이며 기존 생성한 릴리스 서명을 사용한다. APK SHA-256은 `b6d1ca7c126709a5908b7eb527e411386fcaecde0eed9ece3044a311961bbb92`다. 서명과 서버 비밀값·관리 토큰의 APK 미포함 검사를 통과했다. 이전 0.1.0 산출물 대신 이 파일을 설치한다.
+0.1.1 개인 설치 산출물은 `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.1-release.apk`다. `versionName=0.1.1`, `versionCode=2`, minSdk 24, targetSdk 35이며 기존 생성한 릴리스 서명을 사용한다. APK SHA-256은 `b6d1ca7c126709a5908b7eb527e411386fcaecde0eed9ece3044a311961bbb92`다. 서명과 서버 비밀값·관리 토큰의 APK 미포함 검사를 통과했다. 이전 0.1.0 산출물 대신 이 파일을 설치한다.
 
 앱 설치 후 알림 권한을 허용하고 원하는 게시판 제목 옆 종 버튼을 켠다. 별표 저장은 푸시 구독과 별개다. 실제 개인 휴대폰 설치·절전 정책에 따른 수신은 사용 기기에서 추가 확인한다. 서명 키와 `android/key.properties`를 안전하게 백업한다.
 
@@ -210,3 +210,12 @@ node frontend/test/android_notification_smoke.mjs
 최종 호환성 검사에서 API24/25는 채널 없는 Notification.Builder와 앱 상세 설정 화면을 사용하도록 보강했다. API26 이상은 알림 채널·전용 알림 설정을 유지한다. 설정 화면을 제공하지 않는 기기에서는 원문 오류 코드와 한국어 안내를 표시한다. Android12 이상의 백업·기기 이전에서도 `device_identity.xml`을 제외하도록 명시했으며 `frontend/test/android_release_config_test.py`로 설치 인증정보의 복제 금지 규칙을 검증한다.
 
 최종 Android 릴리스 린트를 캐시 없이 재실행해 오류 0건과 `InlinedApi`·`DataExtractionRules` 지적 해소를 확인했다. 구버전에는 `fullBackupContent=false`, Android12 이상에는 cloud/device-transfer의 인증정보 제외 규칙을 함께 적용했다. Flutter 테스트 16개·분석, Android 인증정보 백업 제외 검사 1개, 서명·관리 토큰 및 서버 비밀값 미포함 검사도 통과했다. API24/25 실제 기기 실행은 별도로 수행하지 않았으며 버전 분기와 린트로 호환성을 확인했다.
+
+
+## 0.1.2 공지 카드 개선
+
+고정 공지 배지를 제목 왼쪽에 붙이고 별도의 상단 행을 제거했다. 제목은 한 줄로 표시하며 길면 말줄임한다. 카드의 내부 여백과 메타정보 간격을 줄였고, 일반 공지의 저장 별표는 48dp 터치 영역을 유지한다. 고정 공지는 저장 상태와 관계없이 별표를 숨기며 기존 서버 저장 데이터는 변경하지 않는다.
+
+리뷰 의견에 따라 좁은 화면에서 메타정보 줄바꿈을 허용하고 카드에 고정 높이를 지정하지 않았다. Flutter 테스트 19개와 정적 분석, Android 백업 제외 검사 1개를 통과했다. 새 카드 테스트 3개는 배지 위치·한 줄 말줄임·카드 높이·별표와 카드 클릭 분리·2배 큰 글자 설정을 확인한다. 이번 변경의 에뮬레이터·실기기 실행은 생략했다.
+
+최신 개인 설치 산출물은 `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.2-release.apk`이며 버전은 `0.1.2+3`이다. 기존 릴리스 키의 서명과 운영 URL 포함·서버 비밀값 미포함 검사를 통과했다. APK SHA-256: `95f4e50d2b0f34dbf65553f33f53981786e5cb383880f62ad7e8d7689f6e88c5`.

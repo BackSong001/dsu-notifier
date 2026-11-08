@@ -1002,32 +1002,34 @@ class NoticeCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 10, 16),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   if (notice.isNotice)
                     Container(
+                      margin: const EdgeInsets.only(right: 8),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
+                        horizontal: 6,
+                        vertical: 3,
                       ),
                       decoration: BoxDecoration(
                         color: _DsuColors.primaryLight,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Row(
+                      child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.push_pin,
                             size: 12,
                             color: _DsuColors.primary,
                           ),
-                          const SizedBox(width: 3),
-                          const Text(
+                          SizedBox(width: 3),
+                          Text(
                             '고정 공지',
                             style: TextStyle(
                               color: _DsuColors.primary,
@@ -1038,28 +1040,31 @@ class NoticeCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: saved ? '저장 취소' : '공지 저장',
-                    onPressed: onToggleSaved,
-                    color: saved ? _DsuColors.primary : _DsuColors.tertiaryText,
-                    icon: Icon(saved ? Icons.star : Icons.star_border),
+                  Expanded(
+                    child: Text(
+                      notice.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _DsuColors.text,
+                        fontSize: 16,
+                        height: 1.35,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
+                  if (!notice.isNotice)
+                    IconButton(
+                      tooltip: saved ? '저장 취소' : '공지 저장',
+                      onPressed: onToggleSaved,
+                      color: saved
+                          ? _DsuColors.primary
+                          : _DsuColors.tertiaryText,
+                      icon: Icon(saved ? Icons.star : Icons.star_border),
+                    ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Text(
-                notice.title,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _DsuColors.text,
-                  fontSize: 16,
-                  height: 1.35,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 6),
               Wrap(
                 spacing: 12,
                 runSpacing: 6,
