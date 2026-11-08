@@ -1,0 +1,5 @@
+# 실제 값은 Git에서 제외되는 android/key.properties에만 저장한다.
+storeFile=/absolute/path/to/dsu-release.jks
+storePassword=
+keyAlias=dsu-notifier
+keyPassword=

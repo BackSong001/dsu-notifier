@@ -30,13 +30,25 @@ function publishedDate(value: string): string {
 }
 
 export function parseBoard(html: string, board: { code: string; name: string; url: string }) {
-  const rows = [...html.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map((match) => match[0]);
+  const table = html.match(/<table\b[^>]*class=["'][^"']*\bboard-list-table\b[^"']*["'][^>]*>[\s\S]*?<\/table>/i)?.[0];
+  if (!table) throw new Error("Invalid board markup");
+  const rows = [...table.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map((match) => match[0]);
   const parsedNotices = rows.flatMap((row) => {
     const link = row.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
-    if (!link) return [];
+    if (!link) {
+      if (/class=["'][^"']*\bsubject\b/i.test(row)) throw new Error("Missing notice link");
+      return [];
+    }
     const url = new URL(text(link[1]), board.url);
-    const sourceIdx = url.hostname === ALLOWED_HOST ? url.searchParams.get("idx") : null;
-    if (!sourceIdx) return [];
+    const sourceIdx = url.searchParams.get("idx");
+    if (!sourceIdx && !/class=["'][^"']*\bsubject\b/i.test(row)) return [];
+    if (url.protocol !== "https:" || url.hostname !== ALLOWED_HOST || url.username || url.password ||
+        (url.port && url.port !== "443") || !sourceIdx || !/^\d+$/.test(sourceIdx) || url.searchParams.get("pCode") !== board.code) {
+      throw new Error("Invalid notice URL");
+    }
+    const title = text(link[2]);
+    const date = publishedDate(cell(row, "date"));
+    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) throw new Error("Invalid notice fields");
 
     const numberText = cell(row, "num").replace(/[^0-9]/g, "");
     const isNotice = /class=["'][^"']*\b(?:notice|isnotice)\b|icon-notice/i.test(row) || numberText.length === 0;
@@ -45,9 +57,9 @@ export function parseBoard(html: string, board: { code: string; name: string; ur
       board_name: board.name,
       source_idx: sourceIdx,
       number: numberText ? Number(numberText) : null,
-      title: text(link[2]),
+      title,
       author: cell(row, "writer"),
-      published_at: publishedDate(cell(row, "date")),
+      published_at: date,
       view_count: Number(cell(row, "(?:hit|read)").replaceAll(",", "")) || 0,
       url: url.href,
       is_notice: isNotice,

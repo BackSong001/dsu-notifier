@@ -8,3 +8,5 @@ frontend/app/google-services.json
 frontend/android/app/google-services.json
 frontend/android/app/src/**/google-services.json
 notepad/
+.env.production
+.env.test

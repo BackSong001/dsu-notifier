@@ -3,3 +3,7 @@
 /.idea
 /build
 /app/build
+
+/key.properties
+*.jks
+*.keystore

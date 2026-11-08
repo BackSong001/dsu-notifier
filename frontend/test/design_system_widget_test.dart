@@ -23,10 +23,21 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('공지 18'),
       500,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
     );
     expect(find.text('공지 18'), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.text('2'),
+      100,
+      scrollable: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
+    );
     final pageTwo = find.ancestor(
       of: find.text('2'),
       matching: find.byType(OutlinedButton),
@@ -40,7 +51,10 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('공지 20'),
       300,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ),
     );
     expect(find.text('공지 20'), findsOneWidget);
   });
@@ -100,8 +114,8 @@ void main() {
     await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('공지 저장'), findsOneWidget);
-    await tester.tap(find.byTooltip('공지 저장'));
+    expect(find.byTooltip('공지 저장'), findsWidgets);
+    await tester.tap(find.byTooltip('공지 저장').first);
     await tester.pumpAndSettle();
     expect(find.byTooltip('저장 취소'), findsOneWidget);
 

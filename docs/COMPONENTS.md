@@ -22,7 +22,7 @@ flowchart LR
     Notices --> DB
     Devices --> DB
     Cron -->|10분마다| Scrape
-    Cron -->|수집 후 발송| Dispatch
+    Cron -->|1분마다 발송·재시도| Dispatch
     Scrape --> Site
     Scrape --> DB
     Dispatch --> DB
@@ -74,7 +74,7 @@ flowchart LR
 2. 함수가 `BOARDS`의 6개 게시판 첫 페이지를 요청한다.
 3. 허용 호스트인 `www.dongseo.ac.kr`의 상세 링크만 파싱한다.
 4. `(board_code, source_idx)`를 기준으로 `notices`를 upsert한다.
-5. 새 공지에 대해 `enqueue_notice_notifications`를 호출한다.
+5. 신규 insert 트리거가 같은 트랜잭션에서 `enqueue_notice_notifications`를 호출한다.
 6. 수집 성공·HTTP 실패·파싱 실패를 `scrape_runs`에 기록한다.
 7. 수집 성공 시 최신 첫 페이지에 없는 기존 고정 공지를 `importance_status = failed`로 변경한다.
 
@@ -82,12 +82,12 @@ flowchart LR
 
 ### 알림 발송
 
-1. `notification_outbox`에서 `pending`이며 3회 미만 시도한 항목을 조회한다.
-2. FCM 서비스 계정으로 Google OAuth access token을 발급한다.
-3. FCM HTTP v1 API로 제목·공지 URL·공지 식별자를 발송한다.
-4. 성공 시 `sent`, 시도 횟수, 발송 시각을 기록한다.
-5. 실패 시 시도 횟수를 증가시키고 3회 이후 `failed`로 기록한다.
-6. FCM 401/404 응답은 해당 디바이스를 비활성화한다.
+1. FCM 인증이 성공한 뒤 `claim_notifications`가 `SKIP LOCKED`로 한 건만 `sending` 상태로 획득한다.
+2. 활성 기기와 현재 게시판 구독을 확인하며, 45초 예산 내에서 최대 20건을 처리한다.
+3. 성공은 `sent`, 명확한 429/5xx 거절은 1분 이상의 backoff 후 최대 3회 재시도한다.
+4. 토큰 비활성화는 FCM 응답의 `UNREGISTERED`에만 적용한다. 일반 401/404로 기기를 비활성화하지 않는다.
+5. 응답 유실은 `failed / DELIVERY_UNKNOWN`, FCM 응답 후 DB 기록 실패는 `sending`에 남긴다. 수락 여부를 알 수 없어 자동 재발송하지 않는다.
+6. 아직 획득하지 않은 행은 장애가 나도 `pending`에 남는다. 복구 판단은 `RELEASE.md`를 따른다.
 
 ### 공지 열기
 
@@ -108,7 +108,7 @@ Flutter 항목 선택은 Android MethodChannel을 통해 `ACTION_VIEW`를 호출
 
 - 하나의 공지와 디바이스 조합은 하나의 행만 가진다.
 - `(notice_id, device_id)`는 unique다.
-- 발송 상태는 `pending | sent | failed`다.
+- 발송 상태는 `pending | sending | sent | failed`다.
 - `attempts`는 발송 시도 횟수다.
 
 ### 디바이스와 설정
@@ -135,7 +135,7 @@ Flutter 항목 선택은 Android MethodChannel을 통해 `ACTION_VIEW`를 호출
 | `scrape-notices` | Supabase Cron | `x-cron-secret` |
 | `dispatch-notifications` | Supabase Cron | `x-cron-secret` |
 
-`GET /notices/{id}`는 현재 Edge Function에 구현되어 있지 않다. `cursor` 파라미터도 현재는 응답에 `next_cursor = null`을 반환하므로 실제 페이지네이션을 제공하지 않는다.
+`GET /notices/{id}`와 제목 검색, keyset cursor 페이지네이션을 제공한다. 디바이스 API는 `x-device-secret`을 검증하며 저장 목록은 `/devices/{device_id}/saved-notices`에서 직접 조회한다. 내부 테이블과 DB 함수는 공개 클라이언트의 직접 접근을 차단한다.
 
 ## 6. 실패 처리와 운영 경계
 

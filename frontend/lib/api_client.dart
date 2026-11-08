@@ -16,21 +16,25 @@ class NoticeApiClient {
   NoticeApiClient({
     this.baseUrl = 'https://<supabase-project-ref>.supabase.co/functions/v1',
     this.apiKey,
+    this.deviceSecret,
     JsonFetcher? fetch,
-  }) : _fetch = fetch ?? ((uri) => _fetchJson(uri, apiKey));
+  }) : _fetch = fetch ?? ((uri) => _fetchJson(uri, apiKey, deviceSecret));
 
   final String baseUrl;
   final String? apiKey;
+  final String? deviceSecret;
   final JsonFetcher _fetch;
 
   Future<NoticePage> getNotices({
     String? boardCode,
     int limit = 20,
     String? cursor,
+    String? search,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (boardCode != null) query['board_code'] = boardCode;
     if (cursor != null) query['cursor'] = cursor;
+    if (search != null && search.isNotEmpty) query['search'] = search;
     final uri = Uri.parse('$baseUrl/notices').replace(queryParameters: query);
     final json = await _fetch(uri);
     return NoticePage(
@@ -40,6 +44,30 @@ class NoticeApiClient {
       nextCursor: json['next_cursor'] as String?,
     );
   }
+
+  Future<NoticePage> getSavedNotices(
+    String deviceId, {
+    int limit = 19,
+    String? cursor,
+    String? search,
+  }) async {
+    final json = await _fetchDevice('/devices/$deviceId/saved-notices', {
+      'limit': '$limit',
+      if (cursor != null) 'cursor': cursor,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return NoticePage(
+      items: (json['items'] as List)
+          .map((item) => Notice.fromJson(item as Map<String, dynamic>))
+          .toList(),
+      nextCursor: json['next_cursor'] as String?,
+    );
+  }
+
+  Future<Map<String, dynamic>> _fetchDevice(
+    String path, [
+    Map<String, String>? query,
+  ]) => _fetch(Uri.parse('$baseUrl$path').replace(queryParameters: query));
 
   Future<Map<String, dynamic>> registerDevice({
     required String deviceId,
@@ -95,15 +123,25 @@ class NoticeApiClient {
   ) async {
     final client = HttpClient();
     try {
-      final request = await client.openUrl(method, Uri.parse('$baseUrl$path'));
+      client.connectionTimeout = const Duration(seconds: 15);
+      final request = await client
+          .openUrl(method, Uri.parse('$baseUrl$path'))
+          .timeout(const Duration(seconds: 20));
+      if (deviceSecret != null)
+        request.headers.set('x-device-secret', deviceSecret!);
       request.headers.contentType = ContentType.json;
       if (apiKey != null) {
         request.headers.set('apikey', apiKey!);
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $apiKey');
       }
       request.write(jsonEncode(payload));
-      final response = await request.close();
-      final body = await response.transform(utf8.decoder).join();
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
+      final body = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 20));
       final result = body.isEmpty
           ? <String, dynamic>{}
           : jsonDecode(body) as Map<String, dynamic>;
@@ -118,16 +156,27 @@ class NoticeApiClient {
   static Future<Map<String, dynamic>> _fetchJson(
     Uri uri,
     String? apiKey,
+    String? deviceSecret,
   ) async {
     final client = HttpClient();
     try {
-      final request = await client.getUrl(uri);
+      client.connectionTimeout = const Duration(seconds: 15);
+      final request = await client
+          .getUrl(uri)
+          .timeout(const Duration(seconds: 20));
+      if (deviceSecret != null)
+        request.headers.set('x-device-secret', deviceSecret);
       if (apiKey != null) {
         request.headers.set('apikey', apiKey);
         request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $apiKey');
       }
-      final response = await request.close();
-      final body = await response.transform(utf8.decoder).join();
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
+      final body = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 20));
       final json = jsonDecode(body) as Map<String, dynamic>;
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw Exception(json['error'] ?? 'HTTP ${response.statusCode}');

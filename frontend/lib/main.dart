@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'api_client.dart';
@@ -35,6 +35,7 @@ class _DsuColors {
   static const borderLight = Color(0xFFEEEEEE);
 }
 
+@pragma('vm:entry-point')
 Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
 }
@@ -42,9 +43,16 @@ Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
 void main() => runApp(const DsuNotifierApp());
 
 class DsuNotifierApp extends StatelessWidget {
-  const DsuNotifierApp({super.key, this.initialNotices});
+  const DsuNotifierApp({
+    super.key,
+    this.initialNotices,
+    this.client,
+    this.deviceId,
+  });
 
   final List<Notice>? initialNotices;
+  final NoticeApiClient? client;
+  final String? deviceId;
 
   @override
   Widget build(BuildContext context) {
@@ -90,21 +98,33 @@ class DsuNotifierApp extends StatelessWidget {
           ),
         ),
       ),
-      home: NoticeHomePage(initialNotices: initialNotices),
+      home: NoticeHomePage(
+        initialNotices: initialNotices,
+        client: client,
+        deviceId: deviceId,
+      ),
     );
   }
 }
 
 class NoticeHomePage extends StatefulWidget {
-  const NoticeHomePage({super.key, this.initialNotices});
+  const NoticeHomePage({
+    super.key,
+    this.initialNotices,
+    this.client,
+    this.deviceId,
+  });
 
   final List<Notice>? initialNotices;
+  final NoticeApiClient? client;
+  final String? deviceId;
 
   @override
   State<NoticeHomePage> createState() => _NoticeHomePageState();
 }
 
-class _NoticeHomePageState extends State<NoticeHomePage> {
+class _NoticeHomePageState extends State<NoticeHomePage>
+    with WidgetsBindingObserver {
   late List<Notice> _notices;
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
@@ -114,6 +134,22 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   int _page = 1;
   bool _loading = false;
   String? _deviceId;
+  NoticeApiClient? _client;
+  String? _loadError;
+  String? _pushError;
+  bool _permissionGranted = true;
+  bool _preferencesReady = false;
+  bool _registering = false;
+  int _preferenceGeneration = 0;
+  int _loadGeneration = 0;
+  final _cursors = <String?>[null];
+  String? _nextCursor;
+  final _savingBoards = <String>{};
+  final _savingNotices = <String>{};
+  StreamSubscription<String>? _tokenSubscription;
+  StreamSubscription<RemoteMessage>? _openedSubscription;
+  bool get _fixtureMode => widget.initialNotices != null;
+  bool get _canSave => _fixtureMode || (_deviceId != null && _preferencesReady);
   final _alarmBoards = <String>{};
   final _savedNotices = <String>{};
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
@@ -121,68 +157,152 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   @override
   void initState() {
     super.initState();
-    _notices = [...(widget.initialNotices ?? _fallbackNotices)];
-    _requestNotificationPermission();
+    WidgetsBinding.instance.addObserver(this);
+    _notices = [...(widget.initialNotices ?? <Notice>[])];
+    _client =
+        widget.client ??
+        (_apiUrl.isEmpty
+            ? null
+            : NoticeApiClient(baseUrl: _apiUrl, apiKey: _apiKey));
+    _deviceId = widget.deviceId;
     _loadNotices();
-    _registerForPush();
+    if (widget.client == null && !_fixtureMode) _registerForPush();
+    if (_deviceId != null) _restorePreferences();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     _scrollController.dispose();
     _foregroundMessageSubscription?.cancel();
+    _tokenSubscription?.cancel();
+    _openedSubscription?.cancel();
     super.dispose();
   }
 
-  Future<void> _requestNotificationPermission() async {
-    await _native.invokeMethod<bool>('requestNotifications');
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        !_fixtureMode &&
+        widget.client == null &&
+        _apiUrl.isNotEmpty) {
+      _updatePermission();
+    }
+  }
+
+  Future<void> _updatePermission() async {
+    try {
+      final settings = await FirebaseMessaging.instance
+          .getNotificationSettings();
+      if (mounted)
+        setState(
+          () => _permissionGranted =
+              settings.authorizationStatus == AuthorizationStatus.authorized,
+        );
+    } catch (_) {
+      if (mounted) setState(() => _pushError = '알림 상태를 확인하지 못했습니다.');
+    }
+  }
+
+  Future<void> _restorePreferences() async {
+    if (_savingBoards.isNotEmpty || _savingNotices.isNotEmpty) return;
+    final generation = ++_preferenceGeneration;
+    if (mounted) setState(() => _preferencesReady = false);
+    try {
+      final boards = await _client!.getPreferences(_deviceId!);
+      final saved = await _client!.getNoticePreferences(_deviceId!);
+      if (!mounted || generation != _preferenceGeneration) return;
+      setState(() {
+        _preferencesReady = true;
+        _alarmBoards
+          ..clear()
+          ..addAll(
+            boards.entries
+                .where((entry) => entry.value)
+                .map((entry) => entry.key),
+          );
+        _savedNotices
+          ..clear()
+          ..addAll(saved);
+      });
+    } catch (_) {
+      if (mounted) setState(() => _pushError = '설정을 불러오지 못했습니다. 다시 연결해 주세요.');
+    }
   }
 
   Future<void> _registerForPush() async {
-    if (_apiUrl.isEmpty) return;
+    if (_apiUrl.isEmpty || _registering) return;
+    _registering = true;
     try {
+      final identity = await _native.invokeMapMethod<String, String>(
+        'deviceIdentity',
+      );
+      if (identity == null) throw StateError('DEVICE_IDENTITY_UNAVAILABLE');
+      _client = NoticeApiClient(
+        baseUrl: _apiUrl,
+        apiKey: _apiKey,
+        deviceSecret: identity['secret'],
+      );
       await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+      final messaging = FirebaseMessaging.instance;
+      final settings = await messaging.requestPermission();
+      if (mounted)
+        setState(
+          () => _permissionGranted =
+              settings.authorizationStatus == AuthorizationStatus.authorized,
+        );
       _foregroundMessageSubscription ??= FirebaseMessaging.onMessage.listen(
         _handleForegroundMessage,
       );
-      final messaging = FirebaseMessaging.instance;
-      await messaging.requestPermission();
-      // The initial token is required before the device can receive a push.
+      Future<void> register(String token) async {
+        try {
+          await _client!.registerDevice(
+            deviceId: identity['id']!,
+            fcmToken: token,
+            platform: 'android',
+          );
+          if (!mounted) return;
+          setState(() {
+            _deviceId = identity['id'];
+            _pushError = null;
+          });
+          await _restorePreferences();
+          if (mounted && _selectedMenu == '저장된 공지')
+            await _loadNotices(resetPage: true);
+        } catch (_) {
+          if (mounted)
+            setState(() => _pushError = '알림 연결에 실패했습니다. 다시 연결해 주세요.');
+        }
+      }
+
+      // HTTP v1 발송은 FID 대신 기존 FCM 토큰을 사용한다.
       // ignore: deprecated_member_use
       final token = await messaging.getToken().timeout(
-        const Duration(seconds: 15),
+        const Duration(seconds: 20),
       );
-      if (token == null) return;
-      _deviceId = token;
-      final client = NoticeApiClient(baseUrl: _apiUrl, apiKey: _apiKey);
-      await client.registerDevice(
-        deviceId: token,
-        fcmToken: token,
-        platform: 'android',
-      );
-      _alarmBoards
-        ..clear()
-        ..addAll(
-          (await client.getPreferences(
-            token,
-          )).entries.where((entry) => entry.value).map((entry) => entry.key),
-        );
-      _savedNotices
-        ..clear()
-        ..addAll(await client.getNoticePreferences(token));
-      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      if (token != null) await register(token);
+      if (token == null && mounted)
+        setState(() => _pushError = '알림 토큰을 가져오지 못했습니다.');
+      _tokenSubscription?.cancel();
+      // ignore: deprecated_member_use
+      _tokenSubscription = messaging.onTokenRefresh.listen(register);
+      void openMessage(RemoteMessage message) {
         final url = message.data['url'];
         if (url is String) _openNotice(url);
-      });
-      developer.log('FCM device registration succeeded', name: 'dsu_notifier');
-      if (mounted) setState(() {});
-    } catch (error) {
-      developer.log(
-        'FCM device registration failed: $error',
-        name: 'dsu_notifier',
+      }
+
+      _openedSubscription?.cancel();
+      _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+        openMessage,
       );
+      final initial = await messaging.getInitialMessage();
+      if (initial != null) openMessage(initial);
+    } catch (_) {
+      if (mounted) setState(() => _pushError = '알림 연결에 실패했습니다. 다시 연결해 주세요.');
+    } finally {
+      _registering = false;
     }
   }
 
@@ -196,59 +316,71 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
     });
   }
 
+  void _resetScroll() {
+    if (_scrollController.hasClients) _scrollController.jumpTo(0);
+  }
+
   Future<void> _loadNotices({bool resetPage = false}) async {
-    if (_apiUrl.isEmpty || widget.initialNotices != null) return;
     if (resetPage) {
-      _scrollController.jumpTo(0);
-      setState(() => _page = 1);
+      _resetScroll();
+      _page = 1;
+      _cursors
+        ..clear()
+        ..add(null);
     }
-    setState(() => _loading = true);
+    if (_fixtureMode) return;
+    final generation = ++_loadGeneration;
+    if (_client == null) {
+      setState(() => _loadError = 'SERVER_NOT_CONFIGURED: 서버 연결 설정이 필요합니다.');
+      return;
+    }
+    final menu = _selectedMenu;
+    final board = _selectedBoard;
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
-      if (_selectedMenu == '알람설정') {
-        if (_deviceId != null) {
-          final boards = await NoticeApiClient(
-            baseUrl: _apiUrl,
-            apiKey: _apiKey,
-          ).getPreferences(_deviceId!);
-          if (mounted) {
-            setState(() {
-              _alarmBoards
-                ..clear()
-                ..addAll(
-                  boards.entries
-                      .where((entry) => entry.value)
-                      .map((entry) => entry.key),
-                );
-            });
-          }
-        }
+      if (menu == '알람설정') {
+        if (_deviceId != null) await _restorePreferences();
         return;
       }
-      final boardCode = _selectedMenu == '공지사항' ? _selectedBoard : null;
-      final page = await NoticeApiClient(baseUrl: _apiUrl, apiKey: _apiKey)
-          .getNotices(
-            boardCode: boardCode,
-            limit: _selectedMenu == '저장된 공지' ? 100 : _pageSize,
-          );
-      if (mounted) {
-        setState(() {
-          _notices = boardCode == null
-              ? page.items
-              : [
-                  ..._notices.where((notice) => notice.boardCode != boardCode),
-                  ...page.items,
-                ];
-        });
-      }
+      final result = menu == '저장된 공지'
+          ? _deviceId == null
+                ? const NoticePage(items: [], nextCursor: null)
+                : await _client!.getSavedNotices(
+                    _deviceId!,
+                    limit: _pageSize,
+                    cursor: _cursors[_page - 1],
+                    search: _query,
+                  )
+          : await _client!.getNotices(
+              boardCode: board,
+              limit: _pageSize,
+              cursor: _cursors[_page - 1],
+              search: _query,
+            );
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _notices = result.items;
+        _nextCursor = result.nextCursor;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _resetScroll();
+      });
     } catch (error) {
-      developer.log('Notice loading failed: $error', name: 'dsu_notifier');
+      if (mounted && generation == _loadGeneration)
+        setState(() => _loadError = '목록을 불러오지 못했습니다: $error');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _loadGeneration)
+        setState(() => _loading = false);
     }
   }
 
   List<Notice> get _visibleNotices {
-    final source = _selectedMenu == '저장된 공지'
+    final source = !_fixtureMode
+        ? _notices
+        : _selectedMenu == '저장된 공지'
         ? _notices.where((notice) => _savedNotices.contains(notice.id))
         : _notices.where((notice) => notice.boardCode == _selectedBoard);
     final query = _query.trim().toLowerCase();
@@ -264,11 +396,12 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
     return notices;
   }
 
-  int get _pageCount =>
-      (_visibleNotices.length / _pageSize).ceil().clamp(1, 999999);
+  int get _pageCount => _fixtureMode
+      ? (_visibleNotices.length / _pageSize).ceil().clamp(1, 999999)
+      : _page + (_nextCursor == null ? 0 : 1);
 
   List<Notice> get _pageNotices {
-    final start = (_page - 1) * _pageSize;
+    final start = _fixtureMode ? (_page - 1) * _pageSize : 0;
     return _visibleNotices.skip(start).take(_pageSize).toList();
   }
 
@@ -296,7 +429,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
       _selectedMenu = '공지사항';
       _page = 1;
     });
-    _scrollController.jumpTo(0);
+    _resetScroll();
     _loadNotices(resetPage: true);
   }
 
@@ -305,70 +438,78 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
       _query = _searchController.text;
       _page = 1;
     });
+    _loadNotices(resetPage: true);
   }
 
   Future<void> _toggleBoardAlarm(String boardCode) async {
+    if (!_canSave || _savingBoards.contains(boardCode)) return;
     final enabled = !_alarmBoards.contains(boardCode);
-    setState(() {
-      if (enabled) {
-        _alarmBoards.add(boardCode);
-      } else {
-        _alarmBoards.remove(boardCode);
-      }
-    });
-    if (_deviceId == null || _apiUrl.isEmpty) return;
+    setState(() => _savingBoards.add(boardCode));
     try {
-      await NoticeApiClient(
-        baseUrl: _apiUrl,
-        apiKey: _apiKey,
-      ).savePreferences(_deviceId!, {boardCode: enabled});
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        if (enabled) {
-          _alarmBoards.remove(boardCode);
-        } else {
-          _alarmBoards.add(boardCode);
-        }
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('알람 설정을 저장하지 못했습니다: $error')));
+      if (!_fixtureMode)
+        await _client!.savePreferences(_deviceId!, {boardCode: enabled});
+      if (mounted)
+        setState(() {
+          if (enabled) {
+            _alarmBoards.add(boardCode);
+          } else {
+            _alarmBoards.remove(boardCode);
+          }
+        });
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('알람 설정을 저장하지 못했습니다. 다시 시도해 주세요.')),
+        );
+    } finally {
+      if (mounted) setState(() => _savingBoards.remove(boardCode));
     }
   }
 
   Future<void> _toggleSavedNotice(String noticeId) async {
+    if (!_canSave || _savingNotices.contains(noticeId)) return;
     final saved = !_savedNotices.contains(noticeId);
-    setState(() {
-      if (saved) {
-        _savedNotices.add(noticeId);
-      } else {
-        _savedNotices.remove(noticeId);
-      }
-    });
-    if (_deviceId == null || _apiUrl.isEmpty) return;
+    setState(() => _savingNotices.add(noticeId));
     try {
-      await NoticeApiClient(
-        baseUrl: _apiUrl,
-        apiKey: _apiKey,
-      ).saveNoticePreference(_deviceId!, noticeId, saved);
-    } catch (error) {
+      if (!_fixtureMode)
+        await _client!.saveNoticePreference(_deviceId!, noticeId, saved);
       if (!mounted) return;
       setState(() {
         if (saved) {
-          _savedNotices.remove(noticeId);
-        } else {
           _savedNotices.add(noticeId);
+        } else {
+          _savedNotices.remove(noticeId);
         }
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('공지 저장에 실패했습니다: $error')));
+      if (_selectedMenu == '저장된 공지') await _loadNotices(resetPage: true);
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('공지 저장에 실패했습니다. 다시 시도해 주세요.')),
+        );
+    } finally {
+      if (mounted) setState(() => _savingNotices.remove(noticeId));
     }
   }
 
-  Future<void> _openNotice(String url) =>
-      _native.invokeMethod<void>('openUrl', {'url': url});
+  Future<void> _openNotice(String url) async {
+    try {
+      await _native.invokeMethod<void>('openUrl', {'url': url});
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('공지 링크를 열 수 없습니다.')));
+    }
+  }
+
+  void _changePage(int page) {
+    if (_loading) return;
+    if (!_fixtureMode && page > _cursors.length) _cursors.add(_nextCursor);
+    setState(() => _page = page);
+    _resetScroll();
+    _loadNotices();
+  }
 
   Future<void> _showTestNotification() async {
     await _native.invokeMethod<void>('showTestNotification');
@@ -408,6 +549,27 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         child: Column(
           children: [
             if (_selectedMenu == '공지사항') _buildBoardTabs(),
+            if (!_fixtureMode &&
+                (!_canSave || !_permissionGranted || _pushError != null))
+              MaterialBanner(
+                content: Text(
+                  !_permissionGranted
+                      ? '알림 권한이 꺼져 있습니다. 설정에서 허용해 주세요.'
+                      : _pushError ?? '알림 연결 후 저장과 알람 설정을 사용할 수 있습니다.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      if (!_permissionGranted) {
+                        _native.invokeMethod<void>('openNotificationSettings');
+                      } else {
+                        _registerForPush();
+                      }
+                    },
+                    child: Text(!_permissionGranted ? '설정 열기' : '다시 연결'),
+                  ),
+                ],
+              ),
             Expanded(child: _buildContent(pageCount)),
           ],
         ),
@@ -418,181 +580,172 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   Widget _buildContent(int pageCount) {
     if (_selectedMenu == '알람설정') return _buildAlarmSettingsContent();
     final notices = _pageNotices;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '오늘의 공지',
-            style: TextStyle(
-              color: _DsuColors.primary,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _selectedMenu == '알람설정'
-                      ? '알람설정'
-                      : _selectedMenu == '저장된 공지'
-                      ? '저장된 공지'
-                      : '${_boardLabel(_selectedBoard)} 공지사항',
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                    color: _DsuColors.text,
-                  ),
-                ),
-              ),
-              if (_selectedMenu == '공지사항')
-                IconButton(
-                  tooltip: _alarmBoards.contains(_selectedBoard)
-                      ? '${_boardLabel(_selectedBoard)} 알림 끄기'
-                      : '${_boardLabel(_selectedBoard)} 알림 켜기',
-                  onPressed: () => _toggleBoardAlarm(_selectedBoard),
-                  color: _alarmBoards.contains(_selectedBoard)
-                      ? _DsuColors.primary
-                      : _DsuColors.tertiaryText,
-                  icon: Icon(
-                    _alarmBoards.contains(_selectedBoard)
-                        ? Icons.notifications_active
-                        : Icons.notifications_none,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _selectedMenu == '알람설정'
-                ? '알림을 켠 게시판을 관리합니다.'
-                : _selectedMenu == '저장된 공지'
-                ? '별표를 누른 공지만 모아 보여드립니다.'
-                : '수업부터 졸업까지, 꼭 알아야 할 학사 소식',
-            style: const TextStyle(color: _DsuColors.secondaryText),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _searchController,
-                  textInputAction: TextInputAction.search,
-                  onSubmitted: (_) => _search(),
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.search),
-                    hintText: '검색어를 입력해 주세요',
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 48,
-                child: FilledButton(
-                  onPressed: _search,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _DsuColors.primary,
-                    foregroundColor: _DsuColors.surface,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                  ),
-                  child: const Text('검색'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '전체 ${_visibleNotices.length}건',
-                style: const TextStyle(color: _DsuColors.secondaryText),
-              ),
-              Text(
-                '$_page / $pageCount 페이지',
-                style: const TextStyle(color: _DsuColors.tertiaryText),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: _DsuColors.primary),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _refreshNotices,
-                    color: _DsuColors.primary,
-                    child: ScrollbarTheme(
-                      data: ScrollbarThemeData(
-                        thumbColor: const WidgetStatePropertyAll(
-                          _DsuColors.tertiaryText,
-                        ),
-                        trackColor: const WidgetStatePropertyAll(
-                          _DsuColors.borderLight,
-                        ),
-                        trackVisibility: const WidgetStatePropertyAll(true),
-                        thickness: const WidgetStatePropertyAll(6),
-                        radius: const Radius.circular(3),
-                      ),
-                      child: Scrollbar(
-                        controller: _scrollController,
-                        thumbVisibility: true,
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: notices.isEmpty
-                              ? ListView(
-                                  controller: _scrollController,
-                                  physics:
-                                      const AlwaysScrollableScrollPhysics(),
-                                  children: const [
-                                    SizedBox(
-                                      height: 180,
-                                      child: Center(
-                                        child: Text('조건에 맞는 공지사항이 없습니다.'),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : ListView.separated(
-                                  controller: _scrollController,
-                                  itemCount: notices.length,
-                                  separatorBuilder: (_, __) =>
-                                      const SizedBox(height: 12),
-                                  itemBuilder: (_, index) => NoticeCard(
-                                    notice: notices[index],
-                                    onTap: () =>
-                                        _openNotice(notices[index].url),
-                                    saved: _savedNotices.contains(
-                                      notices[index].id,
-                                    ),
-                                    onToggleSaved: () =>
-                                        _toggleSavedNotice(notices[index].id),
-                                  ),
-                                ),
+    final hasStatus = _loading || _loadError != null || notices.isEmpty;
+    return RefreshIndicator(
+      onRefresh: _refreshNotices,
+      color: _DsuColors.primary,
+      child: Scrollbar(
+        controller: _scrollController,
+        thumbVisibility: true,
+        child: ListView.builder(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(20, 20, 28, 18),
+          itemCount: (hasStatus ? 1 : notices.length) + 2,
+          itemBuilder: (context, index) {
+            if (index == 0) return _buildListHeader(pageCount);
+            if (index == (hasStatus ? 2 : notices.length + 1)) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(
+                  children: [
+                    _buildPagination(pageCount),
+                    if (kDebugMode && _selectedMenu == '공지사항')
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _showTestNotification,
+                          child: const Text('테스트'),
                         ),
                       ),
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 12),
-          _buildPagination(pageCount),
-          if (_selectedMenu == '공지사항')
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _showTestNotification,
-                child: const Text('테스트'),
+                  ],
+                ),
+              );
+            }
+            if (hasStatus) {
+              return SizedBox(
+                height: 220,
+                child: Center(
+                  child: _loading
+                      ? const CircularProgressIndicator()
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _loadError ?? '조건에 맞는 공지사항이 없습니다.',
+                              textAlign: TextAlign.center,
+                            ),
+                            TextButton(
+                              onPressed: () => _loadNotices(resetPage: true),
+                              child: Text(
+                                _loadError == null ? '새로고침' : '다시 시도',
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              );
+            }
+            final notice = notices[index - 1];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: NoticeCard(
+                notice: notice,
+                onTap: () => _openNotice(notice.url),
+                saved: _savedNotices.contains(notice.id),
+                onToggleSaved: _canSave && !_savingNotices.contains(notice.id)
+                    ? () => _toggleSavedNotice(notice.id)
+                    : null,
               ),
-            ),
-        ],
+            );
+          },
+        ),
       ),
+    );
+  }
+
+  Widget _buildListHeader(int pageCount) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '오늘의 공지',
+          style: TextStyle(
+            color: _DsuColors.primary,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _selectedMenu == '저장된 공지'
+                    ? '저장된 공지'
+                    : '${_boardLabel(_selectedBoard)} 공지사항',
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: _DsuColors.text,
+                ),
+              ),
+            ),
+            if (_selectedMenu == '공지사항')
+              IconButton(
+                tooltip:
+                    '${_boardLabel(_selectedBoard)} 알림 ${_alarmBoards.contains(_selectedBoard) ? '끄기' : '켜기'}',
+                onPressed: _canSave && !_savingBoards.contains(_selectedBoard)
+                    ? () => _toggleBoardAlarm(_selectedBoard)
+                    : null,
+                color: _alarmBoards.contains(_selectedBoard)
+                    ? _DsuColors.primary
+                    : _DsuColors.tertiaryText,
+                icon: Icon(
+                  _alarmBoards.contains(_selectedBoard)
+                      ? Icons.notifications_active
+                      : Icons.notifications_none,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _selectedMenu == '저장된 공지'
+              ? '별표를 누른 공지만 모아 보여드립니다.'
+              : '동서대학교의 ${_boardLabel(_selectedBoard)} 소식을 확인하세요.',
+          style: const TextStyle(color: _DsuColors.secondaryText),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _search(),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: '검색어를 입력해 주세요',
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 48,
+              child: FilledButton(onPressed: _search, child: const Text('검색')),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 20,
+          children: [
+            Text(
+              _fixtureMode
+                  ? '전체 ${_visibleNotices.length}건'
+                  : '현재 ${_visibleNotices.length}건',
+              style: const TextStyle(color: _DsuColors.secondaryText),
+            ),
+            Text(
+              _fixtureMode ? '$_page / $pageCount 페이지' : '$_page 페이지',
+              style: const TextStyle(color: _DsuColors.tertiaryText),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 
@@ -601,7 +754,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
         .where((board) => _alarmBoards.contains(board.code))
         .toList();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 18),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -617,7 +770,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
           const Text(
             '알람설정',
             style: TextStyle(
-              fontSize: 28,
+              fontSize: 24,
               fontWeight: FontWeight.w800,
               color: _DsuColors.text,
             ),
@@ -627,7 +780,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
             '알림을 켠 게시판을 관리합니다.',
             style: TextStyle(color: _DsuColors.secondaryText),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           Expanded(
             child: boards.isEmpty
                 ? const Center(child: Text('알림을 켠 게시판이 없습니다.'))
@@ -652,7 +805,10 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
                           subtitle: const Text('게시판 전체 알림'),
                           trailing: IconButton(
                             tooltip: '${board.label} 알림 끄기',
-                            onPressed: () => _toggleBoardAlarm(board.code),
+                            onPressed:
+                                _canSave && !_savingBoards.contains(board.code)
+                                ? () => _toggleBoardAlarm(board.code)
+                                : null,
                             color: _DsuColors.primary,
                             icon: const Icon(Icons.notifications_active),
                           ),
@@ -667,8 +823,10 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   }
 
   Widget _buildBoardTabs() {
+    final tabHeight =
+        52.0 + (MediaQuery.textScalerOf(context).scale(14) - 14).clamp(0, 40);
     return Container(
-      height: 52,
+      height: tabHeight,
       decoration: const BoxDecoration(
         color: _DsuColors.surface,
         border: Border(bottom: BorderSide(color: _DsuColors.borderLight)),
@@ -679,7 +837,7 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
           children: _boards
               .map(
                 (board) => SizedBox(
-                  height: 52,
+                  height: tabHeight,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: TextButton(
@@ -728,48 +886,45 @@ class _NoticeHomePageState extends State<NoticeHomePage> {
   }
 
   Widget _buildPagination(int pageCount) {
+    final first = (_page - 1).clamp(1, (pageCount - 2).clamp(1, pageCount));
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         IconButton(
           tooltip: '이전 페이지',
-          onPressed: _page > 1 ? () => setState(() => _page--) : null,
+          onPressed: _page > 1 && !_loading
+              ? () => _changePage(_page - 1)
+              : null,
           icon: const Icon(Icons.chevron_left),
         ),
-        for (var page = 1; page <= pageCount && page <= 5; page++)
+        for (var page = first; page <= pageCount && page < first + 3; page++)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: SizedBox(
-              width: 40,
-              height: 40,
+              width: 48,
+              height: 48,
               child: page == _page
                   ? FilledButton(
                       onPressed: null,
                       style: FilledButton.styleFrom(
+                        padding: EdgeInsets.zero,
                         disabledBackgroundColor: _DsuColors.primary,
                         disabledForegroundColor: _DsuColors.surface,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
                       ),
                       child: Text('$page'),
                     )
                   : OutlinedButton(
-                      onPressed: () => setState(() => _page = page),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _DsuColors.secondaryText,
-                        side: const BorderSide(color: _DsuColors.border),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
+                      onPressed: _loading ? null : () => _changePage(page),
+                      style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
                       child: Text('$page'),
                     ),
             ),
           ),
         IconButton(
           tooltip: '다음 페이지',
-          onPressed: _page < pageCount ? () => setState(() => _page++) : null,
+          onPressed: _page < pageCount && !_loading
+              ? () => _changePage(_page + 1)
+              : null,
           icon: const Icon(Icons.chevron_right),
         ),
       ],
@@ -833,7 +988,7 @@ class NoticeCard extends StatelessWidget {
   final Notice notice;
   final VoidCallback onTap;
   final bool saved;
-  final VoidCallback onToggleSaved;
+  final VoidCallback? onToggleSaved;
 
   @override
   Widget build(BuildContext context) {
@@ -907,15 +1062,15 @@ class NoticeCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              Row(
+              Wrap(
+                spacing: 12,
+                runSpacing: 6,
                 children: [
-                  Expanded(
-                    child: Text(
-                      '${notice.author}  |  ${notice.publishedAt}',
-                      style: const TextStyle(
-                        color: _DsuColors.tertiaryText,
-                        fontSize: 12,
-                      ),
+                  Text(
+                    '${notice.author}  |  ${notice.publishedAt}',
+                    style: const TextStyle(
+                      color: _DsuColors.tertiaryText,
+                      fontSize: 12,
                     ),
                   ),
                   Text(
@@ -925,7 +1080,6 @@ class NoticeCard extends StatelessWidget {
                       fontSize: 12,
                     ),
                   ),
-                  const SizedBox(width: 12),
                   Text(
                     notice.number?.toString() ?? '고정',
                     style: const TextStyle(
@@ -948,49 +1102,3 @@ String _formatCount(int count) => count.toString().replaceAllMapped(
   RegExp(r'\B(?=(\d{3})+(?!\d))'),
   (match) => ',',
 );
-
-const _fallbackNotices = <Notice>[
-  Notice(
-    id: 'sample-1',
-    boardCode: 'MN2000194',
-    boardName: '학사',
-    sourceIdx: '103653',
-    number: 831,
-    title: '수강신청 안내',
-    author: '교무처',
-    publishedAt: '2026-10-29',
-    viewCount: 1234,
-    url:
-        'https://www.dongseo.ac.kr/kr/index.php?pCode=MN2000194&mode=view&idx=103653',
-    isNotice: false,
-    importanceStatus: null,
-  ),
-  Notice(
-    id: 'sample-2',
-    boardCode: 'MN2000194',
-    boardName: '학사',
-    sourceIdx: '103600',
-    number: null,
-    title: '2026-2 중간성적 학생열람 안내',
-    author: '교무처',
-    publishedAt: '2026-10-28',
-    viewCount: 349,
-    url: 'https://www.dongseo.ac.kr/',
-    isNotice: true,
-    importanceStatus: 'true',
-  ),
-  Notice(
-    id: 'sample-3',
-    boardCode: 'MN2000194',
-    boardName: '학사',
-    sourceIdx: '103599',
-    number: 830,
-    title: '학사 일정 안내',
-    author: '교무처',
-    publishedAt: '2026-10-27',
-    viewCount: 204,
-    url: 'https://www.dongseo.ac.kr/',
-    isNotice: false,
-    importanceStatus: null,
-  ),
-];

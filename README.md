@@ -40,3 +40,18 @@ flutter build apk --debug \
 - Supabase Secrets와 Cron: 운영 프로젝트 값
 
 `.env`, `.env.local`, `google-services.json`은 Git에 커밋하지 않는다. 테스트 디바이스·공지·FCM 토큰도 운영 프로젝트로 복사하지 않는다.
+
+## 출시와 검증
+
+운영 배포 순서, 서명 빌드, Cron/Vault 설정과 구버전 설치 데이터 이전은 [출시 문서](docs/RELEASE.md)를 따른다.
+
+```bash
+npm test
+npx --yes deno test --allow-read --no-lock backend/__TEST__/edge
+npm run test:db
+cd frontend
+flutter test
+flutter analyze
+```
+
+운영은 10분 수집·1분 발송/재시도다. 앱은 설치별 UUID와 인증 비밀값을 사용하며, 게시판 알림과 별표 저장을 따로 관리한다. 새 공지 삽입과 outbox는 같은 트랜잭션에서 처리한다. 결과가 불명확한 FCM 요청은 중복 방지를 위해 자동 재전송하지 않는다.

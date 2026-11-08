@@ -7,6 +7,9 @@ project_id = "dsu-notifier"
 [functions.scrape-notices]
 verify_jwt = false
 
+[functions.notices]
+verify_jwt = false
+
 [functions.devices]
 verify_jwt = false
 
