@@ -10,6 +10,7 @@ class AndroidReleaseConfigTest(unittest.TestCase):
         application = ET.parse(main / 'AndroidManifest.xml').getroot().find('application')
         android = '{http://schemas.android.com/apk/res/android}'
         self.assertEqual(application.get(android + 'allowBackup'), 'false')
+        self.assertEqual(application.get(android + 'fullBackupContent'), 'false')
         resource = application.get(android + 'dataExtractionRules')
         self.assertTrue(resource and resource.startswith('@xml/'))
         rules = ET.parse(main / 'res/xml' / (resource.split('/')[1] + '.xml')).getroot()
