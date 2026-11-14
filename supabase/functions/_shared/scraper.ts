@@ -17,6 +17,12 @@ function cell(row: string, className: string): string {
   return match ? text(match[1]) : "";
 }
 
+function cellWithPrefix(row: string, className: string): string {
+  const match = row.match(new RegExp(`<td[^>]*class=["'][^"']*\\bf-${className}\\b[^"']*["'][^>]*>([\\s\\S]*?)</td>`, "i"));
+  if (match) return text(match[1]);
+  return cell(row, className);
+}
+
 function publishedDate(value: string): string {
   if (!/^\d{1,2}:\d{2}$/.test(value)) return value;
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -33,6 +39,36 @@ export function parseBoard(html: string, board: { code: string; name: string; ur
   const table = html.match(/<table\b[^>]*class=["'][^"']*\bboard-list-table\b[^"']*["'][^>]*>[\s\S]*?<\/table>/i)?.[0];
   if (!table) throw new Error("Invalid board markup");
   const rows = [...table.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map((match) => match[0]);
+
+  // 페이지네이션: 다음 페이지 링크 추출
+  function extractNextPageUrl(htmlContent: string): string | null {
+    // 현재 페이지 번호 찾기 (<strong><span>1</span></strong>)
+    const currentPageMatch = htmlContent.match(/<strong><span>(\d+)<\/span><\/strong>/i);
+    if (currentPageMatch) {
+      const currentPageNum = parseInt(currentPageMatch[1]);
+      const nextPageNum = currentPageNum + 1;
+
+      // 현재 페이지 마커 이후의 영역만 탐색 (이미 지나온 페이지 링크 제외)
+      const afterCurrent = htmlContent.slice(htmlContent.indexOf(currentPageMatch[0]));
+
+      // 다음 페이지 번호를 포함하는 링크 검색 (pg=N 또는 page=N)
+      // href='?pCode=MN2000194&amp;page=1&amp;pg=2' ><span>2</span></a>
+      const nextPageRegex = new RegExp(`<a\\b[^>]*href=["']([^"']*(?:pg|page)=${nextPageNum}[^"']*)["'][^>]*>\\s*(?:<span>)?${nextPageNum}(?:</span>)?\\s*<`, 'i');
+      const nextPageMatch = afterCurrent.match(nextPageRegex);
+      if (nextPageMatch) {
+        return nextPageMatch[1].replaceAll('&amp;', '&');
+      }
+    }
+
+    // 다음 10페이지와 같은 블록 이동 링크 (nextblock 클래스)
+    const nextBlockMatch = htmlContent.match(/<a\b[^>]*class=["'][^"']*nextblock[^"']*["'][^>]*href=["']([^"']+)["']/i);
+    if (nextBlockMatch) {
+      return nextBlockMatch[1].replaceAll('&amp;', '&');
+    }
+
+    return null;
+  }
+
   const parsedNotices = rows.flatMap((row) => {
     const link = row.match(/<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
     if (!link) {
@@ -47,10 +83,10 @@ export function parseBoard(html: string, board: { code: string; name: string; ur
       throw new Error("Invalid notice URL");
     }
     const title = text(link[2]);
-    const date = publishedDate(cell(row, "date"));
+    const date = publishedDate(cellWithPrefix(row, "date"));
     if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) throw new Error("Invalid notice fields");
 
-    const numberText = cell(row, "num").replace(/[^0-9]/g, "");
+    const numberText = cellWithPrefix(row, "num").replace(/[^0-9]/g, "");
     const isNotice = /class=["'][^"']*\b(?:notice|isnotice)\b|icon-notice/i.test(row) || numberText.length === 0;
     return [{
       board_code: board.code,
@@ -58,9 +94,9 @@ export function parseBoard(html: string, board: { code: string; name: string; ur
       source_idx: sourceIdx,
       number: numberText ? Number(numberText) : null,
       title,
-      author: cell(row, "writer"),
+      author: cellWithPrefix(row, "writer"),
       published_at: date,
-      view_count: Number(cell(row, "(?:hit|read)").replaceAll(",", "")) || 0,
+      view_count: Number(cellWithPrefix(row, "(?:hit|read)").replaceAll(",", "")) || 0,
       url: url.href,
       is_notice: isNotice,
       importance_status: isNotice ? "true" : null,
@@ -72,6 +108,8 @@ export function parseBoard(html: string, board: { code: string; name: string; ur
     if (!existing || notice.is_notice) unique.set(notice.source_idx, notice);
     return unique;
   }, new Map<string, (typeof parsedNotices)[number]>()).values()];
-  if (notices.length === 0) throw new Error("No notices found");
-  return notices;
+  return {
+    notices,
+    nextPageUrl: extractNextPageUrl(html)
+  };
 }

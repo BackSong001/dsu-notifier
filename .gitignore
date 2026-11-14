@@ -10,3 +10,4 @@ frontend/android/app/src/**/google-services.json
 notepad/
 .env.production
 .env.test
+.env.product
