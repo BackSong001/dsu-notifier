@@ -126,6 +126,7 @@ class NoticeHomePage extends StatefulWidget {
 class _NoticeHomePageState extends State<NoticeHomePage>
     with WidgetsBindingObserver {
   late List<Notice> _notices;
+  int _totalCount = 0;
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   String _selectedBoard = _boards.first.code;
@@ -351,6 +352,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
       setState(() {
         _notices = result.items;
         _nextCursor = result.nextCursor;
+        _totalCount = result.totalCount ?? _notices.length;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _resetScroll();
@@ -376,20 +378,28 @@ class _NoticeHomePageState extends State<NoticeHomePage>
         : source
               .where((notice) => notice.title.toLowerCase().contains(query))
               .toList();
+    // Sort: pinned first, then by date descending
     notices.sort((a, b) {
-      if (a.isNotice == b.isNotice) return 0;
+      if (a.isNotice == b.isNotice) return b.publishedAt.compareTo(a.publishedAt);
       return a.isNotice ? -1 : 1;
     });
     return notices;
   }
 
+  // Split into pinned and regular for display
+  List<Notice> get _pinnedNotices => _visibleNotices.where((n) => n.isNotice).toList();
+  List<Notice> get _regularNotices => _visibleNotices.where((n) => !n.isNotice).toList();
+
   int get _pageCount => _fixtureMode
       ? (_visibleNotices.length / _pageSize).ceil().clamp(1, 999999)
       : _page + (_nextCursor == null ? 0 : 1);
 
+  // Combined list for pagination: pinned + regular
+  List<Notice> get _allNotices => [..._pinnedNotices, ..._regularNotices];
+
   List<Notice> get _pageNotices {
     final start = _fixtureMode ? (_page - 1) * _pageSize : 0;
-    return _visibleNotices.skip(start).take(_pageSize).toList();
+    return _allNotices.skip(start).take(_pageSize).toList();
   }
 
   void _selectMenu(String menu) {
@@ -733,7 +743,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
             Text(
               _fixtureMode
                   ? '전체 ${_visibleNotices.length}건'
-                  : '현재 ${_visibleNotices.length}건',
+                  : '전체 $_totalCount건 · 현재 ${_visibleNotices.length}건',
               style: const TextStyle(color: _DsuColors.secondaryText),
             ),
             Text(
@@ -895,7 +905,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
               : null,
           icon: const Icon(Icons.chevron_left),
         ),
-        for (var page = first; page <= pageCount && page < first + 3; page++)
+        for (var page = first; page <= pageCount && page < first + 5; page++)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: SizedBox(

@@ -6,10 +6,11 @@ import 'models/notice.dart';
 typedef JsonFetcher = Future<Map<String, dynamic>> Function(Uri uri);
 
 class NoticePage {
-  const NoticePage({required this.items, required this.nextCursor});
+  const NoticePage({required this.items, required this.nextCursor, this.totalCount});
 
   final List<Notice> items;
   final String? nextCursor;
+  final int? totalCount;
 }
 
 class NoticeApiClient {
@@ -42,6 +43,7 @@ class NoticeApiClient {
           .map((item) => Notice.fromJson(item as Map<String, dynamic>))
           .toList(),
       nextCursor: json['next_cursor'] as String?,
+      totalCount: json['total_count'] as int?,
     );
   }
 
@@ -61,6 +63,7 @@ class NoticeApiClient {
           .map((item) => Notice.fromJson(item as Map<String, dynamic>))
           .toList(),
       nextCursor: json['next_cursor'] as String?,
+      totalCount: json['total_count'] as int?,
     );
   }
 
