@@ -133,4 +133,4 @@ Android 개인 설치를 우선합니다. iOS, 키워드별 알림, 학과별 �
 
 ## Google Play 비공개 테스트 준비
 
-앱 콘텐츠·데이터 보안·스토어 설명·12명/14일 테스트·삭제 요청 운영 절차는 [Play Console 제출 가이드](docs/PLAY_CONSOLE_GUIDE.md)를 따른다. Play 업로드 파일은 `frontend/build/app/outputs/bundle/release/dsu-notifier-0.1.3-release.aab`다. 앱 메뉴 → 설정에서 개인정보처리방침·이용약관·데이터 삭제 안내를 오프라인으로 확인한다. 공개 정책은 운영 Supabase의 `/functions/v1/legal/privacy`, `/terms`, `/deletion`에 제공한다.
+앱 콘텐츠·데이터 보안·스토어 설명·12명/14일 테스트·삭제 요청 운영 절차는 [Play Console 제출 가이드](docs/PLAY_CONSOLE_GUIDE.md)를 따른다. Play 업로드 파일은 `frontend/build/app/outputs/bundle/release/dsu-notifier-0.1.3-release.aab`다. 앱 메뉴 → 설정에서 개인정보처리방침·이용약관·데이터 삭제 안내를 오프라인으로 확인한다. 공개 정책은 운영 Supabase의 `/functions/v1/legal/privacy`, `/functions/v1/legal/terms`, `/functions/v1/legal/deletion`에 제공한다.

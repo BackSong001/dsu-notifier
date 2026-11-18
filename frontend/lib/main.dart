@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'api_client.dart';
+import 'settings_page.dart';
 import 'models/notice.dart';
 
 const _native = MethodChannel('dsu_notifier/native');
@@ -57,7 +58,7 @@ class DsuNotifierApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '동서대학교 공지',
+      title: '동서알리미',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -405,6 +406,14 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   void _selectMenu(String menu) {
     if (menu == '학사별 공지사항' || menu == '키워드 알람') return;
     Navigator.pop(context);
+    if (menu == '설정') {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => SettingsPage(deviceId: _deviceId),
+        ),
+      );
+      return;
+    }
     setState(() {
       _selectedMenu = menu;
       _page = 1;
@@ -527,7 +536,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
       drawer: _buildDrawer(),
       appBar: AppBar(
         title: const Text(
-          '동서대학교',
+          '동서알리미',
           style: TextStyle(
             fontWeight: FontWeight.w800,
             color: _DsuColors.primary,
@@ -949,7 +958,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
               child: Align(
                 alignment: Alignment.bottomLeft,
                 child: Text(
-                  '동서대학교\n공지센터',
+                  '동서알리미\n대학 공지 알림',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w800,
@@ -962,6 +971,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
             _menuTile('학사별 공지사항', Icons.school_outlined, enabled: false),
             _menuTile('알람설정', Icons.notifications_active_outlined),
             _menuTile('저장된 공지', Icons.star_outline),
+            _menuTile('설정', Icons.settings_outlined),
             _menuTile('키워드 알람', Icons.manage_search_outlined, enabled: false),
           ],
         ),

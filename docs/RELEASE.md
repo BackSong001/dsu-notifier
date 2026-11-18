@@ -219,3 +219,26 @@ node frontend/test/android_notification_smoke.mjs
 리뷰 의견에 따라 좁은 화면에서 메타정보 줄바꿈을 허용하고 카드에 고정 높이를 지정하지 않았다. Flutter 테스트 19개와 정적 분석, Android 백업 제외 검사 1개를 통과했다. 새 카드 테스트 3개는 배지 위치·한 줄 말줄임·카드 높이·별표와 카드 클릭 분리·2배 큰 글자 설정을 확인한다. 이번 변경의 에뮬레이터·실기기 실행은 생략했다.
 
 최신 개인 설치 산출물은 `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.2-release.apk`이며 버전은 `0.1.2+3`이다. 기존 릴리스 키의 서명과 운영 URL 포함·서버 비밀값 미포함 검사를 통과했다. APK SHA-256: `95f4e50d2b0f34dbf65553f33f53981786e5cb383880f62ad7e8d7689f6e88c5`.
+
+
+## 0.1.3 Play 비공개 테스트 준비 (2026-11-18)
+
+앱 이름과 Android 표시명을 동서알리미로 맞추고 개인 개발 비공식 앱임을 설정에 명시했다. `com.dsu.notifier`와 기존 릴리스 키는 유지했다. 앱 메뉴 → 설정에 개인정보처리방침·서비스 이용약관·데이터 삭제 및 권리 행사·오픈소스 라이선스를 추가했다. 문의 이메일과 공개 설치 ID만 넣은 삭제 요청 복사 기능을 제공한다. 약관 문서는 앱 asset으로 오프라인에서 읽는다.
+
+- 정책 원본은 `frontend/assets/legal/policies.json`, 공개 생성본은 `supabase/functions/legal/documents.json`이다. `python3 scripts/sync-legal-documents.py --check`로 일치 여부를 검사한다.
+- 운영자 백송과 사용자가 공개용으로 제공한 이메일을 반영했다. 실제 자동 기기 등록·검색 전송·서버 저장·공급업체 국외 처리·수동 삭제를 설명하며 단순 비활성화를 데이터 삭제로 표현하지 않는다.
+- 운영 Management API에서 대상 프로젝트 `kxdumukxhocegsnbcfmz`의 DB 지역 `ap-southeast-1`을 확인했다. 새 `legal` 함수만 배포했다. 기존 수집·발송·목록·기기 함수와 DB migration은 이번 작업에서 배포하지 않았다.
+- `https://kxdumukxhocegsnbcfmz.supabase.co/functions/v1/legal/privacy`, `/legal/terms`, `/legal/deletion`에 무인증 요청하여 HTTP 200·UTF-8 텍스트·앱 원본과 동일 본문을 확인했다.
+- 신규 Play 제출 기준에 맞춰 compile/targetSdk를 36으로 올렸다. minSdk는 24다. 버전은 `0.1.3+4`다.
+- Flutter 전체 22개 테스트·정적 분석, 신규 Edge 정책 경로 테스트 2개·타입 검사, Android 백업 제외 검사 1개, 정책 동기화·diff 검사를 통과했다. 새 Flutter 테스트는 로그인 없는 정책 접근·뒤로 복귀·삭제 양식의 공개 ID 복사·좁은 화면의 2배 글자를 확인한다.
+- AVD 목록과 연결된 기기의 이름을 확인하여 `dsu_nofiter`만 사용했다. API 37 에뮬레이터에 운영 API 값을 비운 별도 서명 테스트 APK를 설치해 설정 화면을 시각 점검하고 비행기 모드에서 개인정보처리방침을 열었다. 운영 DB에 테스트 기기 등록이나 가짜 공지를 넣지 않았다. 네트워크 상태를 복구하고 이 작업에서 시작한 에뮬레이터를 종료했다.
+- AAB의 jarsigner 검증·기존 인증서 SHA-256 일치·공식 bundletool validate·패키지/표시명/versionCode/targetSdk·PAGE_ALIGNMENT_16K를 확인했다. 포함된 64비트 `.so`의 ELF LOAD 정렬도 16KB 이상이다. APK는 apksigner·16KB zipalign 검사를 통과했다.
+- 배포용 AAB/APK의 세 아키텍처에서 운영 URL을 확인하고 서버 비밀키·FCM 개인키·관리 토큰·DB 암호 미포함을 검사했다. AAB의 정책 asset도 원본과 같다. 테스트 뒤 최종 APK는 운영 공개 값으로 다시 빌드했다.
+
+Play 업로드: `frontend/build/app/outputs/bundle/release/dsu-notifier-0.1.3-release.aab`.
+개인 설치: `frontend/build/app/outputs/flutter-apk/dsu-notifier-0.1.3-release.apk`.
+
+Console 선언값·IARC 설문·실제 스토어 이미지 업로드·테스터 초대·법적/학교 콘텐츠 권리 확인·Play 앱 서명 키 선택과 최종 제출은 운영자가 [제출 가이드](PLAY_CONSOLE_GUIDE.md)에 따라 수행한다. 앱의 수동 삭제 이메일 처리 약속도 실제 운영해야 한다. Google FID 삭제 API는 구현하지 않았으며 서버 행 삭제를 Google 데이터 즉시 삭제와 동일시하지 않는다. 실제 개인 휴대폰 설치와 이번 버전의 FCM 전 상태 재검증, Google 사전 출시 보고서·심사는 수행하지 않았다.
+
+APK SHA-256: `fd2944882d94d4a4be36209b7b14b5a6dc2897800e7cd59a4022517cb54017aa`.
+AAB SHA-256: `0c03516a7ac016d2f15864cc1c0956af602c77e07be61d4245a5bc229fb940ec`.

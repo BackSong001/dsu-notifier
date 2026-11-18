@@ -1,7 +1,7 @@
 name: dsu_notifier
 description: DSU notice prototype
 publish_to: none
-version: 0.1.2+3
+version: 0.1.3+4
 
 environment:
   sdk: '>=3.9.0 <4.0.0'
@@ -18,3 +18,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/legal/policies.json
