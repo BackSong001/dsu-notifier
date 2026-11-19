@@ -103,6 +103,7 @@ export function parseBoard(html: string, board: { code: string; name: string; ur
       last_seen_at: new Date().toISOString(),
     }];
   });
+  // Deduplication: prefer pinned (is_notice=true) over regular for same source_idx
   const notices = [...parsedNotices.reduce((unique, notice) => {
     const existing = unique.get(notice.source_idx);
     if (!existing || notice.is_notice) unique.set(notice.source_idx, notice);

@@ -23,9 +23,20 @@ Deno.serve(async (request) => {
   const { limit, after, search } = options;
   const board = url.searchParams.get('board_code');
   if (board && !BOARDS.some(item => item.code === board)) return json({ error: 'INVALID_BOARD', message: '게시판을 확인해 주세요.' }, 400);
-  const { data, error } = await supabase.rpc('list_notice_page', {
-    board_input: board, device_input: null, search_input: search, after_input: after, limit_input: limit + 1,
-  });
-  if (error) return json({ error: 'DATABASE_ERROR', message: '목록 조회에 실패했습니다.' }, 500);
-  return json(noticePage(data ?? [], limit));
+
+  const [pageRes, countRes] = await Promise.all([
+    supabase.rpc('list_notice_page', {
+      board_input: board, device_input: null, search_input: search, after_input: after, limit_input: limit + 1,
+    }),
+    (() => {
+      const q = supabase.from('notices').select('*', { count: 'exact', head: true });
+      if (board) q.eq('board_code', board);
+      if (search) q.ilike('title', `%${search}%`);
+      return q;
+    })(),
+  ]);
+
+  if (pageRes.error) return json({ error: 'DATABASE_ERROR', message: '목록 조회에 실패했습니다.' }, 500);
+  const response = noticePage(pageRes.data ?? [], limit);
+  return json({ ...response, total_count: countRes.count ?? 0 });
 });

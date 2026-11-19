@@ -1,3 +1,6 @@
+-- Test file for production release validation
+-- This validates the store_board_snapshot function behavior
+
 begin;
 -- 비밀값 없이 내부 테이블/RPC에 접근할 수 없어야 한다.
 do $$
@@ -24,6 +27,7 @@ do $$ begin
 end $$;
 select store_board_snapshot('MN2000194', '[{"board_code":"MN2000194","board_name":"학사","source_idx":"101","number":1,"title":"fixture regular","author":"fixture","published_at":"2026-11-08","view_count":1,"url":"https://www.dongseo.ac.kr/kr/?pCode=MN2000194&idx=101","is_notice":false}]');
 do $$ begin
+  if (select count(*) from notices) <> 2 then raise exception 'Data lost'; end if;
   if (select importance_status from notices where source_idx='100') <> 'failed' then raise exception 'Pinned disappearance not tracked'; end if;
   begin
     perform store_board_snapshot('MN2000194','[]');

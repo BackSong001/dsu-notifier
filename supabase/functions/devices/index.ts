@@ -38,11 +38,25 @@ Deno.serve(async (request) => {
     let options;
     try { options = parseListQuery(url); } catch { return json({ error: 'INVALID_QUERY', message: '조회 조건을 확인해 주세요.' }, 400); }
     const { limit, after, search } = options;
-    const { data, error } = await supabase.rpc('list_notice_page', {
-      board_input: null, device_input: deviceId, search_input: search, after_input: after, limit_input: limit + 1,
-    });
-    if (error) return json({ error: 'DATABASE_ERROR', message: '저장 공지 조회에 실패했습니다.' }, 500);
-    return json(noticePage(data ?? [], limit));
+
+    const { data: savedIdsData, error: savedIdsError } = await supabase.from('notice_alarm_preferences')
+      .select('notice_id').eq('device_id', deviceId).eq('enabled', true);
+    if (savedIdsError) return json({ error: 'DATABASE_ERROR', message: '저장 공지 조회에 실패했습니다.' }, 500);
+    const savedIds = (savedIdsData ?? []).map((r: { notice_id: string }) => r.notice_id);
+    if (savedIds.length === 0) return json({ items: [], next_cursor: null, total_count: 0 });
+
+    const [pageRes, countRes] = await Promise.all([
+      supabase.rpc('list_notice_page', {
+        board_input: null, device_input: deviceId, search_input: search, after_input: after, limit_input: limit + 1,
+      }),
+      supabase.from('notices').select('*', { count: 'exact', head: true })
+        .in('id', savedIds)
+        .or(search ? `title.ilike.%${search}%` : ''),
+    ]);
+
+    if (pageRes.error) return json({ error: 'DATABASE_ERROR', message: '저장 공지 조회에 실패했습니다.' }, 500);
+    const response = noticePage(pageRes.data ?? [], limit);
+    return json({ ...response, total_count: countRes.count ?? 0 });
   }
   if (route === 'preferences') {
     if (request.method === 'GET') {
