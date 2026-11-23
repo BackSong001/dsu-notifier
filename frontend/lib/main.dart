@@ -1043,7 +1043,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
           style: const TextStyle(color: _DsuColors.secondaryText),
         ),
         const SizedBox(height: 20),
-        ...[
+        if (_selectedMenu == '공지사항') ...[
           Row(
             children: [
               Expanded(
@@ -1065,6 +1065,22 @@ class _NoticeHomePageState extends State<NoticeHomePage>
             ],
           ),
           const SizedBox(height: 18),
+          Row(
+            children: [
+              Icon(Icons.restaurant, color: Colors.orange, size: 20),
+              const SizedBox(width: 8),
+              const Text(
+                '글로벌빌리지 "식단표" 검색 결과',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+        ] else ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
