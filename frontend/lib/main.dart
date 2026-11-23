@@ -15,6 +15,9 @@ const _apiUrl = String.fromEnvironment('SUPABASE_FUNCTIONS_URL');
 const _apiKey = String.fromEnvironment('SUPABASE_ANON_KEY');
 const _pageSize = 19;
 
+// KST timezone offset
+const _kstOffset = Duration(hours: 9);
+
 const _boards = <({String code, String label})>[
   (code: 'MN2000194', label: '학사'),
   (code: 'MN2000191', label: '공지/행사'),
@@ -23,6 +26,173 @@ const _boards = <({String code, String label})>[
   (code: 'MN2000195', label: '장학'),
   (code: 'MN2000196', label: '입찰'),
 ];
+
+enum _CafeteriaMenuType { info, newMillennium, globalVillageMealPlan }
+
+class _CafeteriaMenu {
+  const _CafeteriaMenu({required this.label, required this.icon, required this.type});
+  final String label;
+  final IconData icon;
+  final _CafeteriaMenuType type;
+}
+
+const _cafeteriaMenus = [
+  _CafeteriaMenu(
+    label: '학식정보',
+    icon: Icons.info_outline,
+    type: _CafeteriaMenuType.info,
+  ),
+  _CafeteriaMenu(
+    label: '글로벌빌리지 식단표',
+    icon: Icons.restaurant,
+    type: _CafeteriaMenuType.globalVillageMealPlan,
+  ),
+  _CafeteriaMenu(
+    label: '뉴밀레니엄 식단표',
+    icon: Icons.restaurant_menu,
+    type: _CafeteriaMenuType.newMillennium,
+  ),
+];
+
+/// 글로벌빌리지 식단표 전용 페이지
+class _GlobalVillageMealPlanPage extends StatefulWidget {
+  const _GlobalVillageMealPlanPage({required this.client, required this.deviceId});
+  final NoticeApiClient? client;
+  final String? deviceId;
+
+  @override
+  State<_GlobalVillageMealPlanPage> createState() => _GlobalVillageMealPlanPageState();
+}
+
+class _GlobalVillageMealPlanPageState extends State<_GlobalVillageMealPlanPage> {
+  List<Notice> _notices = [];
+  bool _loading = true;
+  String? _error;
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMealPlanNotices();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadMealPlanNotices() async {
+    if (widget.client == null) {
+      setState(() {
+        _loading = false;
+        _error = '서버 연결 설정이 필요합니다.';
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      // 공지/행사 게시판에서 '식단표' 검색
+      final result = await widget.client!.getNotices(
+        boardCode: 'MN2000191',
+        limit: 50,
+        search: '식단표',
+      );
+      if (!mounted) return;
+      setState(() {
+        _notices = result.items;
+        _loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '식단표를 불러오지 못했습니다: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _openNotice(String url) async {
+    try {
+      await _native.invokeMethod<void>('openUrl', {'url': url});
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('공지 링크를 열 수 없습니다.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('글로벌빌리지 식단표', style: TextStyle(fontWeight: FontWeight.w800, color: _DsuColors.primary)),
+        centerTitle: true,
+        backgroundColor: _DsuColors.surface,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 16),
+                          FilledButton(onPressed: _loadMealPlanNotices, child: const Text('다시 시도')),
+                        ],
+                      ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadMealPlanNotices,
+                    child: _notices.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              SizedBox(
+                                height: MediaQuery.of(context).size.height * 0.6,
+                                child: const Center(child: Text('식단표 공지가 없습니다.')),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                            itemCount: _notices.length,
+                            itemBuilder: (context, index) {
+                              final notice = _notices[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: NoticeCard(
+                                  notice: notice,
+                                  onTap: () => _openNotice(notice.url),
+                                  saved: false,
+                                  onToggleSaved: null,
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+      ),
+    );
+  }
+}
 
 class _DsuColors {
   static const primary = Color(0xFFE11837);
@@ -188,6 +358,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
         widget.client == null &&
         _apiUrl.isNotEmpty) {
       _updatePermission();
+      _loadNotices(resetPage: true); // Auto-refresh on resume for new notices
     }
   }
 
@@ -302,6 +473,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
       'title': notification?.title ?? '새 공지 알림',
       'body': notification?.body ?? '새 공지사항이 등록되었습니다.',
       'url': message.data['url'],
+      'notice_id': message.data['notice_id'],
     });
   }
 
@@ -374,12 +546,15 @@ class _NoticeHomePageState extends State<NoticeHomePage>
         ? _notices.where((notice) => _savedNotices.contains(notice.id))
         : _notices.where((notice) => notice.boardCode == _selectedBoard);
     final query = _query.trim().toLowerCase();
-    final notices = query.isEmpty
+    final filtered = query.isEmpty
         ? source.toList()
         : source
               .where((notice) => notice.title.toLowerCase().contains(query))
               .toList();
+
+    // Show both pinned and regular notices (no deduplication by source_idx)
     // Sort: pinned first, then by date descending
+    final notices = filtered.toList();
     notices.sort((a, b) {
       if (a.isNotice == b.isNotice) return b.publishedAt.compareTo(a.publishedAt);
       return a.isNotice ? -1 : 1;
@@ -391,9 +566,12 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   List<Notice> get _pinnedNotices => _visibleNotices.where((n) => n.isNotice).toList();
   List<Notice> get _regularNotices => _visibleNotices.where((n) => !n.isNotice).toList();
 
-  int get _pageCount => _fixtureMode
-      ? (_visibleNotices.length / _pageSize).ceil().clamp(1, 999999)
-      : _page + (_nextCursor == null ? 0 : 1);
+  int get _pageCount {
+    if (_fixtureMode) return (_visibleNotices.length / _pageSize).ceil().clamp(1, 999999);
+    // API returns total_count for proper pagination
+    if (_totalCount == 0) return 1;
+    return (_totalCount / _pageSize).ceil().clamp(1, 999999);
+  }
 
   // Combined list for pagination: pinned + regular
   List<Notice> get _allNotices => [..._pinnedNotices, ..._regularNotices];
@@ -401,6 +579,136 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   List<Notice> get _pageNotices {
     final start = _fixtureMode ? (_page - 1) * _pageSize : 0;
     return _allNotices.skip(start).take(_pageSize).toList();
+  }
+
+  void _handleCafeteriaMenu(_CafeteriaMenu menu) {
+    switch (menu.type) {
+      case _CafeteriaMenuType.info:
+        _showCafeteriaInfoDialog();
+        break;
+      case _CafeteriaMenuType.globalVillageMealPlan:
+        Navigator.pop(context);
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => _GlobalVillageMealPlanPage(
+              client: _client,
+              deviceId: _deviceId,
+            ),
+          ),
+        );
+        break;
+      case _CafeteriaMenuType.newMillennium:
+        Navigator.pop(context);
+        _openNewMillenniumMenu();
+        break;
+    }
+  }
+
+  void _showCafeteriaInfoDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.restaurant, color: _DsuColors.primary, size: 28),
+            const SizedBox(width: 12),
+            const Text('학식 이용 안내', style: TextStyle(fontWeight: FontWeight.w800)),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildInfoCard(
+                title: '글로벌빌리지',
+                color: _DsuColors.primary.withOpacity(0.1),
+                details: [
+                  '중식: 11:00 ~ 13:30',
+                  '석식: 17:00 ~ 18:30',
+                  '가격: 6,000원 (카드 결제)',
+                  '위치: 글로벌빌리지 6층',
+                ],
+              ),
+              const SizedBox(height: 12),
+              _buildInfoCard(
+                title: '뉴밀레니엄',
+                color: Colors.orange.withOpacity(0.1),
+                details: [
+                  '중식: 11:30 ~ 13:30',
+                  '가격: 7,000원 (현금, 계좌이체)',
+                  '위치: 뉴밀레니엄관 15층',
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('닫기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard({
+    required String title,
+    required Color color,
+    required List<String> details,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _DsuColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: _DsuColors.text,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...details.map(
+            (detail) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_outline, size: 16, color: _DsuColors.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    detail,
+                    style: const TextStyle(fontSize: 14, color: _DsuColors.text),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openNewMillenniumMenu() async {
+    const url = 'https://www.lunchmenu.co.kr/menu/latest?rsat_div=ALL';
+    try {
+      await _native.invokeMethod<void>('openUrl', {'url': url});
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('링크를 열 수 없습니다.')),
+        );
+      }
+    }
   }
 
   void _selectMenu(String menu) {
@@ -414,6 +722,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
       );
       return;
     }
+    // 동서학식 메뉴는 PopupMenuButton으로 이동
     setState(() {
       _selectedMenu = menu;
       _page = 1;
@@ -434,6 +743,11 @@ class _NoticeHomePageState extends State<NoticeHomePage>
       _selectedBoard = board;
       _selectedMenu = '공지사항';
       _page = 1;
+      _query = '';
+      _searchController.clear();
+      _cursors
+        ..clear()
+        ..add(null);
     });
     _resetScroll();
     _loadNotices(resetPage: true);
@@ -555,35 +869,40 @@ class _NoticeHomePageState extends State<NoticeHomePage>
         child: Column(
           children: [
             if (_selectedMenu == '공지사항') _buildBoardTabs(),
-            if (!_fixtureMode &&
-                (!_canSave || !_permissionGranted || _pushError != null))
+            if (!_fixtureMode && !_permissionGranted)
               MaterialBanner(
                 content: Text(
-                  !_permissionGranted
-                      ? '알림 권한이 꺼져 있습니다. 설정에서 허용해 주세요.'
-                      : _pushError ?? '알림 연결 후 저장과 알람 설정을 사용할 수 있습니다.',
+                  '알림 권한이 꺼져 있습니다. 설정에서 허용해 주세요.',
                 ),
                 actions: [
                   TextButton(
                     onPressed: () async {
-                      if (!_permissionGranted) {
-                        try {
-                          await _native.invokeMethod<void>(
-                            'openNotificationSettings',
+                      try {
+                        await _native.invokeMethod<void>(
+                          'openNotificationSettings',
+                        );
+                      } on PlatformException catch (error) {
+                        if (mounted)
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('알림 설정을 열 수 없습니다: ${error.code}'),
+                            ),
                           );
-                        } on PlatformException catch (error) {
-                          if (mounted)
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('알림 설정을 열 수 없습니다: ${error.code}'),
-                              ),
-                            );
-                        }
-                      } else {
-                        await _registerForPush();
                       }
                     },
-                    child: Text(!_permissionGranted ? '설정 열기' : '다시 연결'),
+                    child: const Text('설정 열기'),
+                  ),
+                ],
+              )
+            else if (!_fixtureMode && _pushError != null)
+              MaterialBanner(
+                content: Text(_pushError!),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      await _registerForPush();
+                    },
+                    child: const Text('다시 연결'),
                   ),
                 ],
               ),
@@ -675,9 +994,9 @@ class _NoticeHomePageState extends State<NoticeHomePage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '오늘의 공지',
-          style: TextStyle(
+          style: const TextStyle(
             color: _DsuColors.primary,
             fontSize: 13,
             fontWeight: FontWeight.w800,
@@ -724,27 +1043,52 @@ class _NoticeHomePageState extends State<NoticeHomePage>
           style: const TextStyle(color: _DsuColors.secondaryText),
         ),
         const SizedBox(height: 20),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _searchController,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _search(),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: '검색어를 입력해 주세요',
+        ...[
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _search(),
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: '검색어를 입력해 주세요',
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 48,
+                child: FilledButton(onPressed: _search, child: const Text('검색')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.withOpacity(0.3)),
             ),
-            const SizedBox(width: 8),
-            SizedBox(
-              height: 48,
-              child: FilledButton(onPressed: _search, child: const Text('검색')),
+            child: Row(
+              children: [
+                Icon(Icons.restaurant, color: Colors.orange, size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  '글로벌빌리지 "식단표" 검색 결과',
+                  style: TextStyle(
+                    color: Colors.orange,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        const SizedBox(height: 18),
+          ),
+          const SizedBox(height: 18),
+        ],
         Wrap(
           alignment: WrapAlignment.spaceBetween,
           spacing: 20,
@@ -903,7 +1247,25 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   }
 
   Widget _buildPagination(int pageCount) {
-    final first = (_page - 1).clamp(1, (pageCount - 2).clamp(1, pageCount));
+    const maxVisible = 5; // Show 1 2 3 ... n (max 5 page buttons + prev/next + ellipsis)
+    final pages = <int>[];
+
+    if (pageCount <= maxVisible + 2) {
+      // Small page count: show all
+      for (var i = 1; i <= pageCount; i++) {
+        pages.add(i);
+      }
+    } else {
+      // Show 1, 2, 3, ..., n
+      pages.add(1);
+      pages.add(2);
+      pages.add(3);
+      if (pageCount > 4) {
+        pages.add(-1); // ellipsis marker
+      }
+      pages.add(pageCount);
+    }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -914,8 +1276,14 @@ class _NoticeHomePageState extends State<NoticeHomePage>
               : null,
           icon: const Icon(Icons.chevron_left),
         ),
-        for (var page = first; page <= pageCount && page < first + 5; page++)
-          Padding(
+        ...pages.map((page) {
+          if (page == -1) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Center(child: Text('...', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500))),
+            );
+          }
+          return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: SizedBox(
               width: 48,
@@ -936,7 +1304,8 @@ class _NoticeHomePageState extends State<NoticeHomePage>
                       child: Text('$page'),
                     ),
             ),
-          ),
+          );
+        }),
         IconButton(
           tooltip: '다음 페이지',
           onPressed: _page < pageCount && !_loading
@@ -944,7 +1313,59 @@ class _NoticeHomePageState extends State<NoticeHomePage>
               : null,
           icon: const Icon(Icons.chevron_right),
         ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: '페이지 이동',
+          onPressed: _loading ? null : () => _showPageJumpDialog(pageCount),
+          icon: const Icon(Icons.find_in_page),
+        ),
       ],
+    );
+  }
+
+  void _showPageJumpDialog(int maxPage) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('페이지 이동'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('1 ~ $maxPage 페이지 중 이동할 페이지를 입력하세요.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '페이지 번호',
+                hintText: '예: 5',
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final page = int.tryParse(controller.text.trim());
+              Navigator.pop(context);
+              if (page != null && page >= 1 && page <= maxPage) {
+                _changePage(page);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('1 ~ $maxPage 사이의 숫자를 입력해 주세요.')),
+                );
+              }
+            },
+            child: const Text('이동'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -969,6 +1390,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
             ),
             _menuTile('공지사항', Icons.campaign_outlined),
             _menuTile('학사별 공지사항', Icons.school_outlined, enabled: false),
+            _buildCafeteriaSubmenu(),
             _menuTile('알람설정', Icons.notifications_active_outlined),
             _menuTile('저장된 공지', Icons.star_outline),
             _menuTile('설정', Icons.settings_outlined),
@@ -976,6 +1398,25 @@ class _NoticeHomePageState extends State<NoticeHomePage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCafeteriaSubmenu() {
+    return ExpansionTile(
+      leading: const Icon(Icons.restaurant_outlined),
+      title: const Text('학식 메뉴'),
+      iconColor: _DsuColors.primary,
+      collapsedIconColor: _DsuColors.text,
+      children: _cafeteriaMenus.map((menu) {
+        return ListTile(
+          leading: Icon(menu.icon, color: _DsuColors.text),
+          title: Text(menu.label),
+          onTap: () {
+            Navigator.pop(context);
+            _handleCafeteriaMenu(menu);
+          },
+        );
+      }).toList(),
     );
   }
 
@@ -1058,6 +1499,27 @@ class NoticeCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                  // New badge (KST 24시간 이내)
+                  if (notice.isNew && !notice.isNotice)
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _DsuColors.primary,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'New',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   Expanded(

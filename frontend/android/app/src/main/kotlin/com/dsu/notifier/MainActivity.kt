@@ -76,6 +76,7 @@ class MainActivity : FlutterActivity() {
                         call.argument<String>("title") ?: "새 공지 알림",
                         call.argument<String>("body") ?: "새 공지사항이 등록되었습니다.",
                         call.argument<String>("url"),
+                        call.argument<String>("notice_id"),
                     )
                     result.success(null)
                 }
@@ -115,20 +116,28 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun showTestNotification() {
-        showNotification("새 공지 알림", "테스트 공지사항이 등록되었습니다.", null)
+        showNotification("새 공지 알림", "테스트 공지사항이 등록되었습니다.", null, null)
     }
 
-    private fun showNotification(title: String, body: String, url: String?) {
+    private fun showNotification(title: String, body: String, url: String?, noticeId: String?) {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val safeUri = safeNoticeUri(url)
         val intent = if (safeUri != null) {
-            Intent(Intent.ACTION_VIEW, safeUri)
+            // URL이 있으면 앱으로 열어서 딥링크 처리
+            Intent(this, MainActivity::class.java).apply {
+                putExtra("notice_url", safeUri.toString())
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
         } else {
-            Intent(this, MainActivity::class.java)
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
         }
+        // noticeId를 기반으로 고유한 notification ID 생성
+        val notificationId = noticeId?.hashCode() ?: title.hashCode()
         val pendingIntent = PendingIntent.getActivity(
             this,
-            title.hashCode(),
+            notificationId,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -145,6 +154,6 @@ class MainActivity : FlutterActivity() {
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
-        getSystemService(NotificationManager::class.java).notify(title.hashCode(), notification)
+        getSystemService(NotificationManager::class.java).notify(notificationId, notification)
     }
 }
