@@ -9,7 +9,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
 import android.provider.Settings
 import java.util.UUID
 import java.security.SecureRandom
@@ -22,27 +21,6 @@ class MainActivity : FlutterActivity() {
     private val channelName = "dsu_notifier/native"
     private val notificationChannel = "new_notices"
     private val permissionRequest = 1001
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        openNotificationIntent(intent)
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        openNotificationIntent(intent)
-    }
-
-    private fun openNotificationIntent(intent: Intent) {
-        if (!intent.hasExtra("google.message_id") && !intent.hasExtra("message_id")) return
-        val uri = safeNoticeUri(intent.getStringExtra("url")) ?: return
-        intent.removeExtra("url")
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, uri))
-        } catch (_: android.content.ActivityNotFoundException) {
-            Toast.makeText(this, "공지 링크를 열 수 있는 브라우저가 없습니다.", Toast.LENGTH_LONG).show()
-        }
-    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -76,12 +54,11 @@ class MainActivity : FlutterActivity() {
                         call.argument<String>("title") ?: "새 공지 알림",
                         call.argument<String>("body") ?: "새 공지사항이 등록되었습니다.",
                         call.argument<String>("url"),
-                        call.argument<String>("notice_id"),
                     )
                     result.success(null)
                 }
                 "openUrl" -> {
-                    val uri = safeNoticeUri(call.argument<String>("url"))
+                    val uri = safeExternalUri(call.argument<String>("url"))
                     if (uri == null) result.error("INVALID_URL", "Invalid notice URL", null)
                     else try {
                         startActivity(Intent(Intent.ACTION_VIEW, uri))
@@ -100,6 +77,16 @@ class MainActivity : FlutterActivity() {
         return uri.takeIf { it.scheme == "https" && it.host == "www.dongseo.ac.kr" && it.userInfo == null && (it.port == -1 || it.port == 443) }
     }
 
+    private fun safeExternalUri(url: String?): Uri? {
+        val uri = url?.let { Uri.parse(it) } ?: return null
+        val validHost = uri.host == "www.dongseo.ac.kr" ||
+            (uri.host == "www.lunchmenu.co.kr" && uri.path == "/menu/latest")
+        return uri.takeIf {
+            it.scheme == "https" && validHost && it.userInfo == null &&
+                (it.port == -1 || it.port == 443)
+        }
+    }
+
     private fun requestNotifications(): Boolean {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), permissionRequest)
@@ -116,10 +103,10 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun showTestNotification() {
-        showNotification("새 공지 알림", "테스트 공지사항이 등록되었습니다.", null, null)
+        showNotification("새 공지 알림", "테스트 공지사항이 등록되었습니다.", null)
     }
 
-    private fun showNotification(title: String, body: String, url: String?, noticeId: String?) {
+    private fun showNotification(title: String, body: String, url: String?) {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val safeUri = safeNoticeUri(url)
         val intent = if (safeUri != null) {
@@ -133,8 +120,8 @@ class MainActivity : FlutterActivity() {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
         }
-        // noticeId를 기반으로 고유한 notification ID 생성
-        val notificationId = noticeId?.hashCode() ?: title.hashCode()
+        // 알림마다 다른 ID를 사용해 여러 공지를 동시에 표시한다.
+        val notificationId = System.nanoTime().toInt()
         val pendingIntent = PendingIntent.getActivity(
             this,
             notificationId,

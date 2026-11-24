@@ -30,7 +30,11 @@ const _boards = <({String code, String label})>[
 enum _CafeteriaMenuType { info, newMillennium, globalVillageMealPlan }
 
 class _CafeteriaMenu {
-  const _CafeteriaMenu({required this.label, required this.icon, required this.type});
+  const _CafeteriaMenu({
+    required this.label,
+    required this.icon,
+    required this.type,
+  });
   final String label;
   final IconData icon;
   final _CafeteriaMenuType type;
@@ -43,12 +47,12 @@ const _cafeteriaMenus = [
     type: _CafeteriaMenuType.info,
   ),
   _CafeteriaMenu(
-    label: '글로벌빌리지 식단표',
+    label: '글빌학식',
     icon: Icons.restaurant,
     type: _CafeteriaMenuType.globalVillageMealPlan,
   ),
   _CafeteriaMenu(
-    label: '뉴밀레니엄 식단표',
+    label: '뉴밀학식',
     icon: Icons.restaurant_menu,
     type: _CafeteriaMenuType.newMillennium,
   ),
@@ -56,15 +60,20 @@ const _cafeteriaMenus = [
 
 /// 글로벌빌리지 식단표 전용 페이지
 class _GlobalVillageMealPlanPage extends StatefulWidget {
-  const _GlobalVillageMealPlanPage({required this.client, required this.deviceId});
+  const _GlobalVillageMealPlanPage({
+    required this.client,
+    required this.deviceId,
+  });
   final NoticeApiClient? client;
   final String? deviceId;
 
   @override
-  State<_GlobalVillageMealPlanPage> createState() => _GlobalVillageMealPlanPageState();
+  State<_GlobalVillageMealPlanPage> createState() =>
+      _GlobalVillageMealPlanPageState();
 }
 
-class _GlobalVillageMealPlanPageState extends State<_GlobalVillageMealPlanPage> {
+class _GlobalVillageMealPlanPageState
+    extends State<_GlobalVillageMealPlanPage> {
   List<Notice> _notices = [];
   bool _loading = true;
   String? _error;
@@ -121,9 +130,9 @@ class _GlobalVillageMealPlanPageState extends State<_GlobalVillageMealPlanPage> 
       await _native.invokeMethod<void>('openUrl', {'url': url});
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('공지 링크를 열 수 없습니다.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('공지 링크를 열 수 없습니다.')));
       }
     }
   }
@@ -132,7 +141,13 @@ class _GlobalVillageMealPlanPageState extends State<_GlobalVillageMealPlanPage> 
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('글로벌빌리지 식단표', style: TextStyle(fontWeight: FontWeight.w800, color: _DsuColors.primary)),
+        title: const Text(
+          '글빌학식',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            color: _DsuColors.primary,
+          ),
+        ),
         centerTitle: true,
         backgroundColor: _DsuColors.surface,
         elevation: 0,
@@ -145,50 +160,53 @@ class _GlobalVillageMealPlanPageState extends State<_GlobalVillageMealPlanPage> 
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(_error!, textAlign: TextAlign.center),
-                          const SizedBox(height: 16),
-                          FilledButton(onPressed: _loadMealPlanNotices, child: const Text('다시 시도')),
-                        ],
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: _loadMealPlanNotices,
+                        child: const Text('다시 시도'),
                       ),
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _loadMealPlanNotices,
-                    child: _notices.isEmpty
-                        ? ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            children: [
-                              SizedBox(
-                                height: MediaQuery.of(context).size.height * 0.6,
-                                child: const Center(child: Text('식단표 공지가 없습니다.')),
-                              ),
-                            ],
-                          )
-                        : ListView.builder(
-                            controller: _scrollController,
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                            itemCount: _notices.length,
-                            itemBuilder: (context, index) {
-                              final notice = _notices[index];
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: NoticeCard(
-                                  notice: notice,
-                                  onTap: () => _openNotice(notice.url),
-                                  saved: false,
-                                  onToggleSaved: null,
-                                ),
-                              );
-                            },
-                          ),
+                    ],
                   ),
+                ),
+              )
+            : RefreshIndicator(
+                onRefresh: _loadMealPlanNotices,
+                child: _notices.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.6,
+                            child: const Center(child: Text('식단표 공지가 없습니다.')),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                        itemCount: _notices.length,
+                        itemBuilder: (context, index) {
+                          final notice = _notices[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: NoticeCard(
+                              notice: notice,
+                              onTap: () => _openNotice(notice.url),
+                              saved: false,
+                              onToggleSaved: null,
+                            ),
+                          );
+                        },
+                      ),
+              ),
       ),
     );
   }
@@ -556,18 +574,22 @@ class _NoticeHomePageState extends State<NoticeHomePage>
     // Sort: pinned first, then by date descending
     final notices = filtered.toList();
     notices.sort((a, b) {
-      if (a.isNotice == b.isNotice) return b.publishedAt.compareTo(a.publishedAt);
+      if (a.isNotice == b.isNotice)
+        return b.publishedAt.compareTo(a.publishedAt);
       return a.isNotice ? -1 : 1;
     });
     return notices;
   }
 
   // Split into pinned and regular for display
-  List<Notice> get _pinnedNotices => _visibleNotices.where((n) => n.isNotice).toList();
-  List<Notice> get _regularNotices => _visibleNotices.where((n) => !n.isNotice).toList();
+  List<Notice> get _pinnedNotices =>
+      _visibleNotices.where((n) => n.isNotice).toList();
+  List<Notice> get _regularNotices =>
+      _visibleNotices.where((n) => !n.isNotice).toList();
 
   int get _pageCount {
-    if (_fixtureMode) return (_visibleNotices.length / _pageSize).ceil().clamp(1, 999999);
+    if (_fixtureMode)
+      return (_visibleNotices.length / _pageSize).ceil().clamp(1, 999999);
     // API returns total_count for proper pagination
     if (_totalCount == 0) return 1;
     return (_totalCount / _pageSize).ceil().clamp(1, 999999);
@@ -582,12 +604,12 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   }
 
   void _handleCafeteriaMenu(_CafeteriaMenu menu) {
+    Navigator.pop(context);
     switch (menu.type) {
       case _CafeteriaMenuType.info:
         _showCafeteriaInfoDialog();
         break;
       case _CafeteriaMenuType.globalVillageMealPlan:
-        Navigator.pop(context);
         Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => _GlobalVillageMealPlanPage(
@@ -598,7 +620,6 @@ class _NoticeHomePageState extends State<NoticeHomePage>
         );
         break;
       case _CafeteriaMenuType.newMillennium:
-        Navigator.pop(context);
         _openNewMillenniumMenu();
         break;
     }
@@ -612,7 +633,10 @@ class _NoticeHomePageState extends State<NoticeHomePage>
           children: [
             Icon(Icons.restaurant, color: _DsuColors.primary, size: 28),
             const SizedBox(width: 12),
-            const Text('학식 이용 안내', style: TextStyle(fontWeight: FontWeight.w800)),
+            const Text(
+              '학식 이용 안내',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ],
         ),
         content: SingleChildScrollView(
@@ -683,11 +707,18 @@ class _NoticeHomePageState extends State<NoticeHomePage>
               padding: const EdgeInsets.only(bottom: 6),
               child: Row(
                 children: [
-                  Icon(Icons.check_circle_outline, size: 16, color: _DsuColors.primary),
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 16,
+                    color: _DsuColors.primary,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     detail,
-                    style: const TextStyle(fontSize: 14, color: _DsuColors.text),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: _DsuColors.text,
+                    ),
                   ),
                 ],
               ),
@@ -704,9 +735,9 @@ class _NoticeHomePageState extends State<NoticeHomePage>
       await _native.invokeMethod<void>('openUrl', {'url': url});
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('링크를 열 수 없습니다.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('링크를 열 수 없습니다.')));
       }
     }
   }
@@ -871,9 +902,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
             if (_selectedMenu == '공지사항') _buildBoardTabs(),
             if (!_fixtureMode && !_permissionGranted)
               MaterialBanner(
-                content: Text(
-                  '알림 권한이 꺼져 있습니다. 설정에서 허용해 주세요.',
-                ),
+                content: Text('알림 권한이 꺼져 있습니다. 설정에서 허용해 주세요.'),
                 actions: [
                   TextButton(
                     onPressed: () async {
@@ -1060,48 +1089,12 @@ class _NoticeHomePageState extends State<NoticeHomePage>
               const SizedBox(width: 8),
               SizedBox(
                 height: 48,
-                child: FilledButton(onPressed: _search, child: const Text('검색')),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Icon(Icons.restaurant, color: Colors.orange, size: 20),
-              const SizedBox(width: 8),
-              const Text(
-                '글로벌빌리지 "식단표" 검색 결과',
-                style: TextStyle(
-                  color: Colors.orange,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+                child: FilledButton(
+                  onPressed: _search,
+                  child: const Text('검색'),
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 18),
-        ] else ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange.withOpacity(0.3)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.restaurant, color: Colors.orange, size: 20),
-                const SizedBox(width: 8),
-                const Text(
-                  '글로벌빌리지 "식단표" 검색 결과',
-                  style: TextStyle(
-                    color: Colors.orange,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 18),
         ],
@@ -1263,7 +1256,8 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   }
 
   Widget _buildPagination(int pageCount) {
-    const maxVisible = 5; // Show 1 2 3 ... n (max 5 page buttons + prev/next + ellipsis)
+    const maxVisible =
+        5; // Show 1 2 3 ... n (max 5 page buttons + prev/next + ellipsis)
     final pages = <int>[];
 
     if (pageCount <= maxVisible + 2) {
@@ -1296,7 +1290,12 @@ class _NoticeHomePageState extends State<NoticeHomePage>
           if (page == -1) {
             return const Padding(
               padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Center(child: Text('...', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500))),
+              child: Center(
+                child: Text(
+                  '...',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+              ),
             );
           }
           return Padding(
@@ -1427,10 +1426,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
         return ListTile(
           leading: Icon(menu.icon, color: _DsuColors.text),
           title: Text(menu.label),
-          onTap: () {
-            Navigator.pop(context);
-            _handleCafeteriaMenu(menu);
-          },
+          onTap: () => _handleCafeteriaMenu(menu),
         );
       }).toList(),
     );

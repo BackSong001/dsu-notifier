@@ -10,6 +10,38 @@
 - 푸시: Firebase Cloud Messaging
 - 인증: 초기 버전은 Google 로그인 없이 디바이스 등록 방식
 
+## 자주 쓰는 명령
+
+저장소 루트에서 실행한다. Flutter SDK가 PATH에 없으면 `/home/jh-mac/flutter/bin/flutter`를 사용한다.
+
+```bash
+# 프론트엔드 검증
+cd frontend
+flutter test
+flutter analyze
+
+# Android 릴리스 APK 빌드 (로컬 .env.product의 공개 Supabase 값 사용)
+set -a; source ../.env.product; set +a
+flutter build apk --release \
+  --dart-define=SUPABASE_FUNCTIONS_URL="$SUPABASE_URL/functions/v1" \
+  --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+# 산출물: build/app/outputs/flutter-apk/app-release.apk
+
+# 백엔드 및 Edge Function 테스트
+cd ..
+npm test
+npm run test:edge
+npm run test:db
+
+# Supabase 로컬 개발
+npx supabase status
+npx supabase start
+npx supabase functions serve notices
+npx supabase stop
+```
+
+운영 배포·DB 마이그레이션·서명 APK 절차는 `docs/RELEASE.md`를 따른다. 운영 명령 전에 대상 프로젝트를 확인하고, 운영 DB에서 `db reset`을 실행하지 않는다. `.env.product`와 기타 비밀 파일 내용을 출력하거나 커밋하지 않는다.
+
 ## 확정 범위
 
 - 수집 게시판: `docs/dsu_url.md`의 학사, 공지/행사, 취업, 모집, 장학, 입찰

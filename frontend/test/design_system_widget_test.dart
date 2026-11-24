@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dsu_notifier/main.dart';
 import 'package:dsu_notifier/models/notice.dart';
@@ -108,6 +109,67 @@ void main() {
     expect(find.text('알림을 켠 게시판이 없습니다.'), findsOneWidget);
   });
 
+  testWidgets('keeps cafeteria meal search out of regular notices', (
+    tester,
+  ) async {
+    await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
+    await tester.pumpAndSettle();
+
+    expect(find.text('글로벌빌리지 "식단표" 검색 결과'), findsNothing);
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('학식 메뉴'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('학식정보'), findsOneWidget);
+    expect(find.text('글빌학식'), findsOneWidget);
+    expect(find.text('뉴밀학식'), findsOneWidget);
+  });
+
+  testWidgets(
+    'opens and closes the Global Village meal page without leaving home',
+    (tester) async {
+      await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('학식 메뉴'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('글빌학식'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('글빌학식'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.arrow_back));
+      await tester.pumpAndSettle();
+
+      expect(find.text('동서알리미'), findsOneWidget);
+    },
+  );
+
+  testWidgets('opens New Millennium URL without popping the home route', (
+    tester,
+  ) async {
+    const channel = MethodChannel('dsu_notifier/native');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async => null);
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('학식 메뉴'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('뉴밀학식'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('동서알리미'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('saves a notice with the star and lists it in saved notices', (
     tester,
   ) async {
@@ -150,7 +212,9 @@ void main() {
     await tester.pumpAndSettle();
 
     final cards = tester.widgetList<NoticeCard>(find.byType(NoticeCard));
+    expect(cards, hasLength(2));
     expect(cards.first.notice.isNotice, isTrue);
+    expect(cards.first.notice.title, '고정 안내 공지');
     expect(cards.last.notice.title, '신규 추가 공지');
   });
 
