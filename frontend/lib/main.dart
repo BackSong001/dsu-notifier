@@ -730,7 +730,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   }
 
   void _openNewMillenniumMenu() async {
-    const url = 'https://www.lunchmenu.co.kr/menu/latest?rsat_div=ALL';
+    const url = 'http://www.lunchmenu.co.kr/menu/latest?rsat_div=ALL';
     try {
       await _native.invokeMethod<void>('openUrl', {'url': url});
     } catch (_) {

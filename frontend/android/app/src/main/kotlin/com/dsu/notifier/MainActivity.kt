@@ -79,11 +79,12 @@ class MainActivity : FlutterActivity() {
 
     private fun safeExternalUri(url: String?): Uri? {
         val uri = url?.let { Uri.parse(it) } ?: return null
-        val validHost = uri.host == "www.dongseo.ac.kr" ||
-            (uri.host == "www.lunchmenu.co.kr" && uri.path == "/menu/latest")
         return uri.takeIf {
-            it.scheme == "https" && validHost && it.userInfo == null &&
-                (it.port == -1 || it.port == 443)
+            it.userInfo == null &&
+                ((it.host == "www.dongseo.ac.kr" && it.scheme == "https" &&
+                    (it.port == -1 || it.port == 443)) ||
+                    (it.host == "www.lunchmenu.co.kr" && it.scheme == "http" &&
+                        it.path == "/menu/latest" && (it.port == -1 || it.port == 80)))
         }
     }
 

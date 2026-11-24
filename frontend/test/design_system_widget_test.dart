@@ -150,8 +150,12 @@ void main() {
     tester,
   ) async {
     const channel = MethodChannel('dsu_notifier/native');
+    String? openedUrl;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async => null);
+        .setMockMethodCallHandler(channel, (call) async {
+          openedUrl = (call.arguments as Map)['url'] as String;
+          return null;
+        });
     addTearDown(
       () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, null),
@@ -167,6 +171,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('동서알리미'), findsOneWidget);
+    expect(
+      openedUrl,
+      'http://www.lunchmenu.co.kr/menu/latest?rsat_div=ALL',
+    );
     expect(tester.takeException(), isNull);
   });
 
