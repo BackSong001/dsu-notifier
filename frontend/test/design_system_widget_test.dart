@@ -256,6 +256,13 @@ void main() {
         isNotice: true,
         importanceStatus: 'true',
       ),
+      makeNotice(
+        id: 'failed-pin',
+        title: '사라진 고정 공지',
+        number: null,
+        isNotice: true,
+        importanceStatus: 'failed',
+      ),
     ];
     await tester.pumpWidget(DsuNotifierApp(initialNotices: mixedNotices));
     await tester.pumpAndSettle();
@@ -263,6 +270,7 @@ void main() {
 
     final cards = tester.widgetList<NoticeCard>(find.byType(NoticeCard));
     expect(cards, hasLength(2));
+    expect(find.text('사라진 고정 공지'), findsNothing);
     expect(cards.first.notice.isNotice, isTrue);
     expect(cards.first.notice.title, '고정 안내 공지');
     expect(cards.last.notice.title, '신규 추가 공지');

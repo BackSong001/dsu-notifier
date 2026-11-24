@@ -30,6 +30,7 @@ Deno.serve(async (request) => {
     }),
     (() => {
       const q = supabase.from('notices').select('*', { count: 'exact', head: true });
+      q.or('importance_status.is.null,importance_status.neq.failed');
       if (board) q.eq('board_code', board);
       if (search) q.ilike('title', `%${search}%`);
       return q;

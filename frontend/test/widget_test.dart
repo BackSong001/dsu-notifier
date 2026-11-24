@@ -17,6 +17,13 @@ void main() {
         publishedAt: '2026-11-${(index + 10).toString().padLeft(2, '0')}',
       ),
     );
+    notices[0] = makeNotice(
+      id: 'failed-pin',
+      title: '사라진 고정 공지',
+      isNotice: true,
+      importanceStatus: 'failed',
+      publishedAt: '2026-11-20',
+    );
     await tester.pumpWidget(DsuNotifierApp(initialNotices: notices));
     await tester.pumpAndSettle();
 
@@ -37,6 +44,7 @@ void main() {
       expect(find.text('최근 공지 $index'), findsOneWidget);
     }
     expect(find.text('최근 공지 0'), findsNothing);
+    expect(find.text('사라진 고정 공지'), findsNothing);
   });
 
   testWidgets('opens all-board alarm settings from the dashboard', (

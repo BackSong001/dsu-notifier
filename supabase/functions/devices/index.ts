@@ -49,9 +49,13 @@ Deno.serve(async (request) => {
       supabase.rpc('list_notice_page', {
         board_input: null, device_input: deviceId, search_input: search, after_input: after, limit_input: limit + 1,
       }),
-      supabase.from('notices').select('*', { count: 'exact', head: true })
-        .in('id', savedIds)
-        .or(search ? `title.ilike.%${search}%` : ''),
+      (() => {
+        const q = supabase.from('notices').select('*', { count: 'exact', head: true })
+          .in('id', savedIds)
+          .or('importance_status.is.null,importance_status.neq.failed');
+        if (search) q.ilike('title', `%${search}%`);
+        return q;
+      })(),
     ]);
 
     if (pageRes.error) return json({ error: 'DATABASE_ERROR', message: '저장 공지 조회에 실패했습니다.' }, 500);

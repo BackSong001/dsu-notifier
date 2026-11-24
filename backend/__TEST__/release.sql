@@ -29,6 +29,7 @@ select store_board_snapshot('MN2000194', '[{"board_code":"MN2000194","board_name
 do $$ begin
   if (select count(*) from notices) <> 2 then raise exception 'Data lost'; end if;
   if (select importance_status from notices where source_idx='100') <> 'failed' then raise exception 'Pinned disappearance not tracked'; end if;
+  if (select count(*) from list_notice_page('MN2000194', null, '', null, 101) where importance_status = 'failed') <> 0 then raise exception 'Failed pinned notice was listed'; end if;
   begin
     perform store_board_snapshot('MN2000194','[]');
     raise exception 'Empty snapshot accepted';

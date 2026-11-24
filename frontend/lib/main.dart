@@ -560,11 +560,12 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   }
 
   List<Notice> get _visibleNotices {
-    final source = !_fixtureMode
+    final source = (!_fixtureMode
         ? _notices
         : _selectedMenu == '저장된 공지'
         ? _notices.where((notice) => _savedNotices.contains(notice.id))
-        : _notices.where((notice) => notice.boardCode == _selectedBoard);
+        : _notices.where((notice) => notice.boardCode == _selectedBoard))
+        .where((notice) => notice.importanceStatus != 'failed');
     final query = _query.trim().toLowerCase();
     final filtered = query.isEmpty
         ? source.toList()
@@ -584,7 +585,9 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   }
 
   List<Notice> get _dashboardNotices {
-    final latest = [..._notices]
+    final latest = _notices
+        .where((notice) => notice.importanceStatus != 'failed')
+        .toList()
       ..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
     return latest.take(5).toList();
   }
