@@ -26,6 +26,8 @@ flutter build apk --release \
   --dart-define=SUPABASE_FUNCTIONS_URL="$SUPABASE_URL/functions/v1" \
   --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 # 산출물: build/app/outputs/flutter-apk/app-release.apk
+cp -f build/app/outputs/flutter-apk/app-release.apk /mnt/gdrive/Share/app-release.apk
+# 매 빌드 후 공유 폴더의 app-release.apk를 최신 산출물로 교체한다.
 
 # 백엔드 및 Edge Function 테스트
 cd ..
