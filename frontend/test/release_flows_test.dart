@@ -5,6 +5,13 @@ import 'package:dsu_notifier/main.dart';
 import 'package:dsu_notifier/api_client.dart';
 import 'test_fixtures.dart';
 
+Future<void> openNotices(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Open navigation menu'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('공지사항').first);
+  await tester.pumpAndSettle();
+}
+
 class FakeClient extends NoticeApiClient {
   bool fail = false;
   @override
@@ -65,6 +72,7 @@ void main() {
     final client = FakeClient()..fail = true;
     await tester.pumpWidget(DsuNotifierApp(client: client));
     await tester.pumpAndSettle();
+    await openNotices(tester);
     expect(find.textContaining('HTTP_ERROR'), findsOneWidget);
     expect(find.text('수강신청 안내'), findsNothing);
     client.fail = false;
@@ -89,6 +97,7 @@ void main() {
       DsuNotifierApp(client: client, deviceId: 'test-device'),
     );
     await tester.pumpAndSettle();
+    await openNotices(tester);
     final button = find.ancestor(
       of: find.byTooltip('공지 저장'),
       matching: find.byType(IconButton),
@@ -110,6 +119,7 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       await tester.pumpWidget(DsuNotifierApp(client: FakeClient()));
       await tester.pumpAndSettle();
+      await openNotices(tester);
       expect(tester.takeException(), isNull);
       await tester.ensureVisible(find.byType(TextField));
       await tester.pumpAndSettle();

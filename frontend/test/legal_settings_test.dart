@@ -28,7 +28,7 @@ void main() {
     }
     await tester.pageBack();
     await tester.pumpAndSettle();
-    expect(find.text('검색'), findsOneWidget);
+    expect(find.text('학교 소식과 학식을 한눈에'), findsOneWidget);
   });
 
   testWidgets(
