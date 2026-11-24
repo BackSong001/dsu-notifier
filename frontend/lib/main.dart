@@ -319,7 +319,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   String _selectedBoard = _boards.first.code;
-  String _selectedMenu = '공지사항';
+  String _selectedMenu = '홈';
   String _query = '';
   int _page = 1;
   bool _loading = false;
@@ -524,7 +524,9 @@ class _NoticeHomePageState extends State<NoticeHomePage>
         if (_deviceId != null) await _restorePreferences();
         return;
       }
-      final result = menu == '저장된 공지'
+      final result = menu == '홈'
+          ? await _client!.getNotices(limit: 100)
+          : menu == '저장된 공지'
           ? _deviceId == null
                 ? const NoticePage(items: [], nextCursor: null)
                 : await _client!.getSavedNotices(
@@ -581,6 +583,12 @@ class _NoticeHomePageState extends State<NoticeHomePage>
     return notices;
   }
 
+  List<Notice> get _dashboardNotices {
+    final latest = [..._notices]
+      ..sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    return latest.take(5).toList();
+  }
+
   // Split into pinned and regular for display
   List<Notice> get _pinnedNotices =>
       _visibleNotices.where((n) => n.isNotice).toList();
@@ -605,24 +613,30 @@ class _NoticeHomePageState extends State<NoticeHomePage>
 
   void _handleCafeteriaMenu(_CafeteriaMenu menu) {
     Navigator.pop(context);
+    _openCafeteriaMenu(menu);
+  }
+
+  void _openCafeteriaMenu(_CafeteriaMenu menu) {
     switch (menu.type) {
       case _CafeteriaMenuType.info:
         _showCafeteriaInfoDialog();
         break;
       case _CafeteriaMenuType.globalVillageMealPlan:
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => _GlobalVillageMealPlanPage(
-              client: _client,
-              deviceId: _deviceId,
-            ),
-          ),
-        );
+        _openGlobalVillageMealPlan();
         break;
       case _CafeteriaMenuType.newMillennium:
         _openNewMillenniumMenu();
         break;
     }
+  }
+
+  void _openGlobalVillageMealPlan() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            _GlobalVillageMealPlanPage(client: _client, deviceId: _deviceId),
+      ),
+    );
   }
 
   void _showCafeteriaInfoDialog() {
@@ -753,10 +767,17 @@ class _NoticeHomePageState extends State<NoticeHomePage>
       );
       return;
     }
-    // 동서학식 메뉴는 PopupMenuButton으로 이동
+    _activateMenu(menu);
+  }
+
+  void _activateMenu(String menu) {
     setState(() {
       _selectedMenu = menu;
       _page = 1;
+      if (menu == '공지사항') {
+        _query = '';
+        _searchController.clear();
+      }
     });
     _loadNotices(resetPage: true);
   }
@@ -935,7 +956,11 @@ class _NoticeHomePageState extends State<NoticeHomePage>
                   ),
                 ],
               ),
-            Expanded(child: _buildContent(pageCount)),
+            Expanded(
+              child: _selectedMenu == '홈'
+                  ? _buildDashboard()
+                  : _buildContent(pageCount),
+            ),
           ],
         ),
       ),
@@ -1015,6 +1040,237 @@ class _NoticeHomePageState extends State<NoticeHomePage>
             );
           },
         ),
+      ),
+    );
+  }
+
+  Widget _buildDashboard() {
+    final latest = _dashboardNotices;
+    return RefreshIndicator(
+      onRefresh: _refreshNotices,
+      color: _DsuColors.primary,
+      child: ListView(
+        controller: _scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: _DsuColors.primary,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '학교 소식과 학식을 한눈에',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 23,
+                    height: 1.25,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '공지와 식단 정보를 빠르게 확인하세요.',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 20),
+                FilledButton.icon(
+                  onPressed: () => _activateMenu('공지사항'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: _DsuColors.primary,
+                  ),
+                  icon: const Icon(Icons.campaign_outlined),
+                  label: const Text('공지사항 전체 보기'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          LayoutBuilder(
+            builder: (context, constraints) => Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _dashboardShortcut(
+                  width: (constraints.maxWidth - 12) / 2,
+                  icon: Icons.restaurant_outlined,
+                  title: '학식정보',
+                  subtitle: '운영 시간과 위치',
+                  onTap: _showCafeteriaInfoDialog,
+                ),
+                _dashboardShortcut(
+                  width: (constraints.maxWidth - 12) / 2,
+                  icon: Icons.restaurant,
+                  title: '글빌학식',
+                  subtitle: '글로벌빌리지 식단표',
+                  onTap: _openGlobalVillageMealPlan,
+                ),
+                _dashboardShortcut(
+                  width: (constraints.maxWidth - 12) / 2,
+                  icon: Icons.open_in_new,
+                  title: '뉴밀학식',
+                  subtitle: '뉴밀레니엄 메뉴',
+                  onTap: _openNewMillenniumMenu,
+                ),
+                _dashboardShortcut(
+                  width: (constraints.maxWidth - 12) / 2,
+                  icon: Icons.notifications_active_outlined,
+                  title: '알람설정',
+                  subtitle: '게시판별 알림 관리',
+                  onTap: _openAlarmSettings,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 30),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  '최근 공지',
+                  style: TextStyle(
+                    color: _DsuColors.text,
+                    fontSize: 21,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => _activateMenu('공지사항'),
+                child: const Text('전체 보기'),
+              ),
+            ],
+          ),
+          if (_loading && latest.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 36),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_loadError != null && latest.isEmpty)
+            _dashboardMessage(_loadError!, '다시 시도', _refreshNotices)
+          else if (latest.isEmpty)
+            _dashboardMessage('새 공지가 없습니다.', '새로고침', _refreshNotices)
+          else
+            ...latest.map(_dashboardNoticeTile),
+        ],
+      ),
+    );
+  }
+
+  Widget _dashboardShortcut({
+    required double width,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: width,
+      child: Material(
+        color: _DsuColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 100),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              border: Border.all(color: _DsuColors.borderLight),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: _DsuColors.primary, size: 22),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: _DsuColors.secondaryText,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dashboardNoticeTile(Notice notice) {
+    return InkWell(
+      onTap: () => _openNotice(notice.url),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 38,
+              decoration: BoxDecoration(
+                color: notice.isNotice ? _DsuColors.primary : _DsuColors.border,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notice.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _DsuColors.text,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${notice.boardName}  ·  ${notice.publishedAt}',
+                    style: const TextStyle(
+                      color: _DsuColors.tertiaryText,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: _DsuColors.tertiaryText),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dashboardMessage(
+    String message,
+    String actionLabel,
+    VoidCallback onPressed,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 20),
+      child: Column(
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          TextButton(onPressed: onPressed, child: Text(actionLabel)),
+        ],
       ),
     );
   }
@@ -1120,9 +1376,6 @@ class _NoticeHomePageState extends State<NoticeHomePage>
   }
 
   Widget _buildAlarmSettingsContent() {
-    final boards = _boards
-        .where((board) => _alarmBoards.contains(board.code))
-        .toList();
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
       child: Column(
@@ -1147,45 +1400,41 @@ class _NoticeHomePageState extends State<NoticeHomePage>
           ),
           const SizedBox(height: 6),
           const Text(
-            '알림을 켠 게시판을 관리합니다.',
+            '게시판별 새 공지 알림을 설정하세요.',
             style: TextStyle(color: _DsuColors.secondaryText),
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: boards.isEmpty
-                ? const Center(child: Text('알림을 켠 게시판이 없습니다.'))
-                : ListView.separated(
-                    itemCount: boards.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, index) {
-                      final board = boards[index];
-                      return Card(
-                        margin: EdgeInsets.zero,
-                        color: _DsuColors.surface,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: const BorderSide(color: _DsuColors.border),
-                        ),
-                        child: ListTile(
-                          title: Text(
-                            board.label,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: const Text('게시판 전체 알림'),
-                          trailing: IconButton(
-                            tooltip: '${board.label} 알림 끄기',
-                            onPressed:
-                                _canSave && !_savingBoards.contains(board.code)
-                                ? () => _toggleBoardAlarm(board.code)
-                                : null,
-                            color: _DsuColors.primary,
-                            icon: const Icon(Icons.notifications_active),
-                          ),
-                        ),
-                      );
-                    },
+            child: ListView.separated(
+              itemCount: _boards.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (_, index) {
+                final board = _boards[index];
+                final enabled = _alarmBoards.contains(board.code);
+                return Card(
+                  margin: EdgeInsets.zero,
+                  color: _DsuColors.surface,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: _DsuColors.border),
                   ),
+                  child: SwitchListTile(
+                    title: Text(
+                      board.label,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(enabled ? '새 공지 알림 켜짐' : '새 공지 알림 꺼짐'),
+                    value: enabled,
+                    activeColor: _DsuColors.primary,
+                    onChanged:
+                        _canSave && !_savingBoards.contains(board.code)
+                        ? (_) => _toggleBoardAlarm(board.code)
+                        : null,
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -1403,6 +1652,7 @@ class _NoticeHomePageState extends State<NoticeHomePage>
                 ),
               ),
             ),
+            _menuTile('홈', Icons.home_outlined),
             _menuTile('공지사항', Icons.campaign_outlined),
             _menuTile('학사별 공지사항', Icons.school_outlined, enabled: false),
             _buildCafeteriaSubmenu(),
